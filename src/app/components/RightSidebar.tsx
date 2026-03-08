@@ -20,27 +20,20 @@ const feedsConfig: PriceFeed[] = [
 ];
 
 export function RightSidebar() {
+  const API_KEY = import.meta.env.VITE_COINMARKETCAP_API_KEY;
+  const hasApiKey = Boolean(API_KEY && API_KEY.trim() !== '');
+
   const [feeds, setFeeds] = useState<PriceFeed[]>(feedsConfig);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [hasApiKey, setHasApiKey] = useState(false);
 
   const fetchPrices = async () => {
+    if (!hasApiKey) return;
+
     try {
-      const API_KEY = import.meta.env.VITE_COINMARKETCAP_API_KEY;
-      
-      if (!API_KEY || API_KEY.trim() === '') {
-        setHasApiKey(false);
-        setIsConnected(false);
-        return;
-      }
-
-      setHasApiKey(true);
-
-      // CoinMarketCap API - Professional crypto data
       const symbols = feedsConfig.map(f => f.symbol).join(',');
       const response = await fetch(
-        `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${symbols}&convert=USD`,
+        `/cmc-api/v1/cryptocurrency/quotes/latest?symbol=${symbols}&convert=USD`,
         {
           headers: {
             'X-CMC_PRO_API_KEY': API_KEY,
@@ -48,32 +41,24 @@ export function RightSidebar() {
         }
       );
       
-      if (!response.ok) throw new Error('Failed to fetch prices from CoinMarketCap');
+      if (!response.ok) throw new Error(`CMC error: ${response.status}`);
       
       const data = await response.json();
       
       setFeeds(prevFeeds => 
         prevFeeds.map(feed => {
           const coinData = data.data?.[feed.symbol];
-          
           if (!coinData) return feed;
           
           const price = coinData.quote.USD.price;
           const change24h = coinData.quote.USD.percent_change_24h;
           const volume24h = coinData.quote.USD.volume_24h;
-          const marketCap = coinData.quote.USD.market_cap;
           
-          // Calculate confidence based on volume and market cap
           const confidence = volume24h > 10000000000 ? 0.01 : 
                            volume24h > 1000000000 ? 0.02 : 
                            volume24h > 100000000 ? 0.05 : 0.10;
           
-          return {
-            ...feed,
-            price,
-            change24h,
-            confidence,
-          };
+          return { ...feed, price, change24h, confidence };
         })
       );
       
@@ -82,7 +67,6 @@ export function RightSidebar() {
     } catch (error) {
       console.error('Error fetching prices from CoinMarketCap:', error);
       setIsConnected(false);
-      setHasApiKey(false);
     }
   };
 

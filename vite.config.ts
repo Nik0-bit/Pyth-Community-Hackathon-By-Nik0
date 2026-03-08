@@ -23,5 +23,12 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5000,
     allowedHosts: true,
+    proxy: {
+      '/cmc-api': {
+        target: 'https://pro-api.coinmarketcap.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/cmc-api/, ''),
+      },
+    },
   },
 })

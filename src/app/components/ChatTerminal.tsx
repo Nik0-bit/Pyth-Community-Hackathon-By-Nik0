@@ -82,7 +82,7 @@ export function ChatTerminal() {
       }
 
       const response = await fetch(
-        `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${symbol.toUpperCase()}&convert=USD`,
+        `/cmc-api/v1/cryptocurrency/quotes/latest?symbol=${symbol.toUpperCase()}&convert=USD`,
         {
           headers: {
             'X-CMC_PRO_API_KEY': API_KEY,
