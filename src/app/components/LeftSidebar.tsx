@@ -1,12 +1,6 @@
-import { TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react';
-import { useState, useEffect } from 'react';
-
-interface Token {
-  symbol: string;
-  balance: number;
-  value: number;
-  change: number;
-}
+import { Bell, ArrowUpRight } from 'lucide-react';
+import { AlertPanel } from './AlertPanel';
+import type { PriceAlert } from '../services/apiService';
 
 interface Trade {
   action: string;
@@ -16,98 +10,59 @@ interface Trade {
   success: boolean;
 }
 
-const tokens: Token[] = [
-  { symbol: 'SOL', balance: 12.5, value: 1850.5, change: 5.2 },
-  { symbol: 'USDC', balance: 5420.0, value: 5420.0, change: 0.0 },
-  { symbol: 'PYTH', balance: 850.0, value: 425.0, change: -2.1 },
-];
-
 const recentTrades: Trade[] = [
-  { action: 'Swap', token: 'SOL → USDC', amount: '2.5 SOL', time: '2m ago', success: true },
-  { action: 'Price Check', token: 'BTC/USD', amount: '$67,234', time: '5m ago', success: true },
-  { action: 'Compare', token: 'SOL vs ETH', amount: 'Vol Analysis', time: '12m ago', success: true },
+  { action: 'Price Check', token: 'BTC/USD', amount: 'Pyth Oracle', time: 'live', success: true },
+  { action: 'Price Check', token: 'SOL/USD', amount: 'Pyth Oracle', time: 'live', success: true },
+  { action: 'Volatility', token: 'ETH/USD', amount: 'Confidence: ±0.05%', time: 'live', success: true },
 ];
 
-export function LeftSidebar() {
-  const [hasApiKey, setHasApiKey] = useState(false);
+interface LeftSidebarProps {
+  alerts: PriceAlert[];
+  onDeleteAlert: (id: string) => void;
+  walletAddress?: string;
+}
 
-  useEffect(() => {
-    const apiKey = import.meta.env.VITE_COINMARKETCAP_API_KEY;
-    setHasApiKey(!!apiKey && apiKey.trim() !== '');
-  }, []);
+export function LeftSidebar({ alerts, onDeleteAlert, walletAddress }: LeftSidebarProps) {
+  const activeAlerts = alerts.filter(a => a.status === 'active');
 
   return (
     <div className="w-80 bg-[#0d1117] border-r border-gray-800 flex flex-col overflow-hidden">
-      {/* My Wallet Section */}
       <div className="p-6 border-b border-gray-800">
-        <h2 
-          className="text-lg mb-4 tracking-wide" 
+        <h2
+          className="text-lg mb-4 tracking-wide"
           style={{ fontFamily: 'Inter, sans-serif', color: '#a78bfa' }}
         >
           MY WALLET
         </h2>
-        <div className="space-y-3">
-          {tokens.map((token) => (
-            <div 
-              key={token.symbol} 
-              className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 hover:border-purple-500/50 transition-all duration-300"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <span 
-                  className="text-lg" 
-                  style={{ fontFamily: 'JetBrains Mono, monospace', color: '#fff' }}
-                >
-                  {token.symbol}
-                </span>
-                <div className="flex items-center gap-1">
-                  {hasApiKey ? (
-                    <>
-                      {token.change > 0 ? (
-                        <TrendingUp className="w-4 h-4 text-green-400" />
-                      ) : token.change < 0 ? (
-                        <TrendingDown className="w-4 h-4 text-red-400" />
-                      ) : null}
-                      <span 
-                        className={`text-sm ${token.change > 0 ? 'text-green-400' : token.change < 0 ? 'text-red-400' : 'text-gray-400'}`}
-                        style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                      >
-                        {token.change > 0 ? '+' : ''}{token.change}%
-                      </span>
-                    </>
-                  ) : (
-                    <span 
-                      className="text-xs text-purple-400 font-bold px-2 py-1 bg-purple-500/20 rounded"
-                      style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                    >
-                      SOON
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="text-sm text-gray-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {token.balance.toFixed(2)}
-              </div>
-              <div className="text-sm text-gray-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {hasApiKey ? `$${token.value.toFixed(2)}` : (
-                  <span className="text-purple-400">SOON</span>
-                )}
-              </div>
+        {walletAddress ? (
+          <div className="bg-gray-900/50 border border-purple-500/30 rounded-lg p-4">
+            <div className="text-xs text-gray-400 mb-1" style={{ fontFamily: 'Inter, sans-serif' }}>Connected</div>
+            <div className="text-sm font-bold text-purple-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {walletAddress.slice(0, 8)}...{walletAddress.slice(-8)}
             </div>
-          ))}
-        </div>
+            <div className="text-xs text-green-400 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>
+              ● Solana Mainnet
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 text-center">
+            <p className="text-sm text-gray-500" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Connect Phantom wallet to view balances
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Recent Trades Section */}
-      <div className="p-6 flex-1 overflow-auto">
-        <h2 
-          className="text-lg mb-4 tracking-wide" 
+      <div className="p-6 border-b border-gray-800">
+        <h2
+          className="text-lg mb-4 tracking-wide"
           style={{ fontFamily: 'Inter, sans-serif', color: '#3b82f6' }}
         >
-          RECENT TRADES
+          RECENT ACTIVITY
         </h2>
         <div className="space-y-3">
           {recentTrades.map((trade, idx) => (
-            <div 
+            <div
               key={idx}
               className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 hover:border-blue-500/50 transition-all duration-300"
             >
@@ -122,17 +77,33 @@ export function LeftSidebar() {
               </div>
               <div className="flex justify-between items-center mt-2">
                 <span className="text-xs text-blue-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {hasApiKey ? trade.amount : (
-                    <span className="text-purple-400">SOON</span>
-                  )}
+                  {trade.amount}
                 </span>
-                <span className="text-xs text-gray-500" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <span className="text-xs text-green-400" style={{ fontFamily: 'Inter, sans-serif' }}>
                   {trade.time}
                 </span>
               </div>
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="p-6 flex-1 overflow-auto">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell className="w-4 h-4 text-purple-400" />
+          <h2
+            className="text-lg tracking-wide"
+            style={{ fontFamily: 'Inter, sans-serif', color: '#a78bfa' }}
+          >
+            PRICE ALERTS
+          </h2>
+          {activeAlerts.length > 0 && (
+            <span className="ml-auto text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-bold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {activeAlerts.length}
+            </span>
+          )}
+        </div>
+        <AlertPanel alerts={alerts} onDelete={onDeleteAlert} />
       </div>
     </div>
   );

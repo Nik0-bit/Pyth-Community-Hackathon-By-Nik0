@@ -1,69 +1,105 @@
-import { Wallet, Circle } from 'lucide-react';
+import { Wallet, Circle, Bell, Settings } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState, useEffect } from 'react';
+import { api } from '../services/apiService';
 
-export function Header() {
-  const [hasApiKey, setHasApiKey] = useState(false);
+interface HeaderProps {
+  alertCount: number;
+  walletAddress?: string;
+  onConnectWallet: () => void;
+  onOpenSettings: () => void;
+}
+
+export function Header({ alertCount, walletAddress, onConnectWallet, onOpenSettings }: HeaderProps) {
+  const [pythStatus, setPythStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
+  const [geminiStatus, setGeminiStatus] = useState<'checking' | 'active' | 'inactive'>('checking');
 
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_COINMARKETCAP_API_KEY;
-    setHasApiKey(!!apiKey && apiKey.trim() !== '');
+    api.getHealth().then(h => {
+      setPythStatus('live');
+      setGeminiStatus(h.gemini ? 'active' : 'inactive');
+    }).catch(() => {
+      setPythStatus('error');
+      setGeminiStatus('inactive');
+    });
   }, []);
+
+  const shortAddress = walletAddress
+    ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
+    : null;
 
   return (
     <header className="h-16 border-b border-gray-800 bg-[#0d1117] flex items-center px-6 justify-between">
-      {/* Left - Logo */}
-      <div className="flex items-center gap-2">
-        <h1 
-          className="text-3xl tracking-wider" 
+      <div className="flex items-center gap-3">
+        <h1
+          className="text-3xl tracking-wider"
           style={{ fontFamily: 'Orbitron, sans-serif', color: '#a78bfa', textShadow: '0 0 20px rgba(167, 139, 250, 0.5)' }}
         >
           AKIRO LABS
         </h1>
-        {/* Placeholder for missing Figma image */}
-        <div 
+        <div
           className="h-10 w-10 flex items-center justify-center rounded-full bg-purple-900/50 border border-purple-500/50"
-          style={{
-            boxShadow: '0 0 20px rgba(167, 139, 250, 0.5)',
-          }}
+          style={{ boxShadow: '0 0 20px rgba(167, 139, 250, 0.5)' }}
         >
           <span className="text-xl font-bold text-purple-300">A</span>
         </div>
       </div>
 
-      {/* Center - Status bars */}
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/50 rounded-lg border border-gray-800">
-          <Circle className={`w-2 h-2 ${hasApiKey ? 'fill-green-400 text-green-400' : 'fill-purple-400 text-purple-400 animate-pulse'}`} />
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/50 rounded-lg border border-gray-800" data-testid="pyth-status">
+          <Circle className={`w-2 h-2 ${pythStatus === 'live' ? 'fill-green-400 text-green-400' : pythStatus === 'error' ? 'fill-red-400 text-red-400' : 'fill-yellow-400 text-yellow-400 animate-pulse'}`} />
           <span className="text-sm text-gray-300" style={{ fontFamily: 'Inter, sans-serif' }}>
-            CoinMarketCap: {hasApiKey ? (
-              <span className="text-green-400">Connected</span>
-            ) : (
-              <span className="text-purple-400">SOON</span>
-            )}
+            Pyth Network:{' '}
+            {pythStatus === 'live' && <span className="text-green-400">Live</span>}
+            {pythStatus === 'error' && <span className="text-red-400">Error</span>}
+            {pythStatus === 'connecting' && <span className="text-yellow-400 animate-pulse">Connecting</span>}
           </span>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/50 rounded-lg border border-gray-800">
-          <Circle className="w-2 h-2 fill-blue-400 text-blue-400" />
+
+        <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/50 rounded-lg border border-gray-800" data-testid="gemini-status">
+          <Circle className={`w-2 h-2 ${geminiStatus === 'active' ? 'fill-blue-400 text-blue-400' : 'fill-gray-500 text-gray-500'}`} />
           <span className="text-sm text-gray-300" style={{ fontFamily: 'Inter, sans-serif' }}>
-            MCP Bridge: <span className="text-blue-400">Active</span>
+            Gemini AI:{' '}
+            {geminiStatus === 'active' && <span className="text-blue-400">Active</span>}
+            {geminiStatus === 'inactive' && <span className="text-gray-500">Setup needed</span>}
+            {geminiStatus === 'checking' && <span className="text-gray-400 animate-pulse">Checking</span>}
           </span>
         </div>
+
+        {alertCount > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/30 rounded-lg border border-purple-500/40" data-testid="alert-count">
+            <Bell className="w-4 h-4 text-purple-400 animate-pulse" />
+            <span className="text-sm text-purple-400 font-bold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {alertCount} alert{alertCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Right - Wallet and Network */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <div className="px-4 py-2 bg-gray-900/50 rounded-lg border border-gray-800">
           <span className="text-sm text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
             Network: <span className="text-purple-400">Solana</span>
           </span>
         </div>
-        <Button 
+
+        <button
+          onClick={onOpenSettings}
+          className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-all"
+          title="Settings"
+          data-testid="settings-button"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+
+        <Button
+          onClick={onConnectWallet}
           className="bg-purple-600 hover:bg-purple-700 text-white transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/50"
           style={{ fontFamily: 'Inter, sans-serif' }}
+          data-testid="connect-wallet-button"
         >
           <Wallet className="w-4 h-4 mr-2" />
-          Connect Wallet
+          {shortAddress ? shortAddress : 'Connect Wallet'}
         </Button>
       </div>
     </header>
