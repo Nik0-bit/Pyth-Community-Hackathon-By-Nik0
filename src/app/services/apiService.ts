@@ -60,10 +60,10 @@ export const api = {
     return req(`/pyth/price/${symbol}`);
   },
 
-  async chat(messages: ChatMessage[]): Promise<ChatResponse> {
+  async chat(messages: ChatMessage[], defaultEmail?: string): Promise<ChatResponse> {
     return req('/chat', {
       method: 'POST',
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, defaultEmail }),
     });
   },
 

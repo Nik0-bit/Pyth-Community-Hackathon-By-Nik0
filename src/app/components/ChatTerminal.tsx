@@ -110,7 +110,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
     ];
 
     try {
-      const response = await api.chat(newHistory);
+      const response = await api.chat(newHistory, defaultEmail);
 
       if (response.success) {
         setChatHistory([

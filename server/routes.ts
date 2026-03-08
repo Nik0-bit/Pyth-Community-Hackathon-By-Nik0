@@ -47,14 +47,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post('/api/chat', async (req, res) => {
     try {
-      const { messages } = req.body;
+      const { messages, defaultEmail } = req.body;
       if (!Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ success: false, error: 'messages array required' });
       }
 
       const symbols = getAllSupportedSymbols();
       const pythPrices = await fetchPythPrices(symbols);
-      const result = await chat(messages, pythPrices);
+      const result = await chat(messages, pythPrices, defaultEmail);
 
       if (result.action?.action === 'create_alert') {
         const a = result.action;
@@ -66,7 +66,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           condition: a.condition,
           targetPrice: a.targetPrice,
           currentPrice,
-          email: a.email || '',
+          email: a.email || defaultEmail || '',
           note: a.note || '',
         });
 

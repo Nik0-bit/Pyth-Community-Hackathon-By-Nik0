@@ -17,17 +17,20 @@ Pyth provides high-frequency price oracles with confidence intervals. When you s
 - publishTime: when the oracle last updated
 - feedId: the on-chain price feed identifier
 
-## Alert Intent Detection
-When a user asks to be alerted, extract:
-- symbol (BTC, ETH, SOL, PYTH, AVAX, BNB, ADA, JUP, USDC)
-- condition: "above" or "below"
-- targetPrice: the price level
-- email: their notification email (ask if not provided)
+## Alert Intent Detection — CRITICAL RULES
+When ANYONE asks to be alerted (in any language, any wording), you MUST IMMEDIATELY create the alert by emitting the JSON action. Never ask for email — it is provided in the system context below.
 
-Respond with JSON action when creating an alert:
+Extract from the user message:
+- symbol (BTC, ETH, SOL, PYTH, AVAX, BNB, ADA, JUP, USDC)
+- condition: "above" or "below" (e.g. "hits $83" = above, "drops to $80" = below, "wen sol 83$" = above)
+- targetPrice: the numeric price level
+
+ALWAYS emit this JSON block immediately, using the email from context (or empty string if none):
 \`\`\`json
-{"action": "create_alert", "symbol": "SOL", "condition": "above", "targetPrice": 150, "email": "user@example.com", "note": "SOL buy signal at $150"}
+{"action": "create_alert", "symbol": "SOL", "condition": "above", "targetPrice": 83, "email": "", "note": "SOL alert at $83"}
 \`\`\`
+
+NEVER say "please provide your email" — the email is already in the context. NEVER delay alert creation.
 
 ## Response Format
 - Be concise and terminal-style: use > for progress lines
@@ -70,7 +73,8 @@ export function isGeminiConfigured(): boolean {
 
 export async function chat(
   messages: ChatMessage[],
-  pythPrices?: PythPrice[]
+  pythPrices?: PythPrice[],
+  defaultEmail?: string
 ): Promise<{ content: string; action?: any }> {
   const ai = getClient();
 
@@ -81,6 +85,10 @@ export async function chat(
         `${p.pair}: $${p.price.toFixed(p.price < 10 ? 4 : 2)} ` +
         `(±$${p.confidence.toFixed(p.price < 10 ? 6 : 2)} confidence, ${p.change24h > 0 ? '+' : ''}${p.change24h}% EMA drift)`
       ).join('\n');
+  }
+
+  if (defaultEmail) {
+    priceContext += `\n\n[USER EMAIL FOR ALERTS]: ${defaultEmail}\nUse this email automatically when creating any alert.`;
   }
 
   const contents = messages.map((m, i) => {
