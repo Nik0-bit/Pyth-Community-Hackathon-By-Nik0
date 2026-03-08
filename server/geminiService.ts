@@ -1,18 +1,5 @@
-import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 import type { PythPrice } from './pythService.js';
-
-let client: OpenAI | null = null;
-
-function getClient(): OpenAI {
-  if (!client) {
-    const baseURL = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
-    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || 'placeholder';
-    client = new OpenAI({ apiKey, baseURL });
-  }
-  return client;
-}
-
-const MODEL = 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `You are Akiro AI — an intelligent DeFi trading assistant for the Akiro Labs terminal, powered by Pyth Network real-time price oracles on Solana.
 
@@ -60,39 +47,67 @@ export interface ChatMessage {
   content: string;
 }
 
+function getClient(): GoogleGenAI {
+  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || 'placeholder';
+
+  if (baseUrl) {
+    return new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        apiVersion: '',
+        baseUrl,
+      },
+    });
+  }
+
+  return new GoogleGenAI({ apiKey });
+}
+
+export function isGeminiConfigured(): boolean {
+  return !!(process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || process.env.GEMINI_API_KEY);
+}
+
 export async function chat(
   messages: ChatMessage[],
   pythPrices?: PythPrice[]
 ): Promise<{ content: string; action?: any }> {
   const ai = getClient();
 
-  let contextNote = '';
+  let priceContext = '';
   if (pythPrices && pythPrices.length > 0) {
-    contextNote = '\n\n[LIVE PYTH ORACLE DATA]\n' +
+    priceContext = '\n\n[LIVE PYTH ORACLE DATA]\n' +
       pythPrices.map(p =>
         `${p.pair}: $${p.price.toFixed(p.price < 10 ? 4 : 2)} ` +
         `(±$${p.confidence.toFixed(p.price < 10 ? 6 : 2)} confidence, ${p.change24h > 0 ? '+' : ''}${p.change24h}% EMA drift)`
       ).join('\n');
   }
 
-  const messagesWithContext = messages.map((m, i) => {
-    if (i === messages.length - 1 && m.role === 'user' && contextNote) {
-      return { role: m.role, content: m.content + contextNote };
-    }
-    return m;
+  const contents = messages.map((m, i) => {
+    const role = m.role === 'assistant' ? 'model' : 'user';
+    const text = (i === messages.length - 1 && m.role === 'user' && priceContext)
+      ? m.content + priceContext
+      : m.content;
+    return {
+      role,
+      parts: [{ text }],
+    };
   });
 
   try {
-    const completion = await ai.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...messagesWithContext,
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
+        { role: 'model', parts: [{ text: 'Understood. I am Akiro AI, ready to assist with DeFi trading and Pyth Network data.' }] },
+        ...contents,
       ],
-      max_tokens: 8192,
+      config: {
+        maxOutputTokens: 8192,
+      },
     });
 
-    const rawContent = completion.choices[0]?.message?.content || 'Sorry, no response generated.';
+    const rawContent = response.text || 'Sorry, no response generated.';
 
     const actionMatch = rawContent.match(/```json\s*(\{[^`]*"action"\s*:[^`]*\})\s*```/s);
     let action: any = null;
@@ -107,7 +122,7 @@ export async function chat(
 
     return { content, action };
   } catch (err: any) {
-    console.error('[Gemini] error:', err?.message);
+    console.error('[Gemini] error:', err?.message || err);
     throw err;
   }
 }
