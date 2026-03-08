@@ -20,7 +20,6 @@ export default function App() {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [walletAddress, setWalletAddress] = useState<string | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [resendKey, setResendKey] = useState('');
   const [defaultEmail, setDefaultEmail] = useState('');
 
   useEffect(() => {
@@ -29,7 +28,6 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.email) setDefaultEmail(parsed.email);
-        if (parsed.resendKey) setResendKey(parsed.resendKey);
       } catch {}
     }
   }, []);
@@ -94,7 +92,7 @@ export default function App() {
   }, [defaultEmail, handleNewAlert]);
 
   const saveSettings = () => {
-    localStorage.setItem('akiro_settings', JSON.stringify({ email: defaultEmail, resendKey }));
+    localStorage.setItem('akiro_settings', JSON.stringify({ email: defaultEmail }));
     setSettingsOpen(false);
   };
 
@@ -143,23 +141,7 @@ export default function App() {
                 data-testid="input-email"
               />
             </div>
-            <div>
-              <label className="text-sm text-gray-400 block mb-1" style={{ fontFamily: 'Inter, sans-serif' }}>
-                Resend API Key (for email notifications)
-              </label>
-              <input
-                type="password"
-                value={resendKey}
-                onChange={e => setResendKey(e.target.value)}
-                placeholder="re_..."
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none"
-                style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                data-testid="input-resend-key"
-              />
-              <p className="text-xs text-gray-600 mt-1">
-                Get a free key at resend.com (3,000 emails/month free)
-              </p>
-            </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 onClick={saveSettings}
