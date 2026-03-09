@@ -48,7 +48,7 @@ const promptSuggestions = [
   { icon: BarChart3, text: 'Correlate SOL and ETH', gradient: 'from-indigo-500 to-purple-600' },
 ];
 
-const JUPITER_QUOTE_URL = 'https://quote-api.jup.ag/v6';
+const JUPITER_QUOTE_URL = 'https://lite-api.jup.ag/swap/v1';
 
 const TOKEN_MINTS: Record<string, string> = {
   SOL:  'So11111111111111111111111111111111111111112',
@@ -88,28 +88,14 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
   const handleQuote = useCallback(async () => {
     setState({ status: 'quoting' });
     try {
-      const fromMint = TOKEN_MINTS[fromToken.toUpperCase()];
-      const toMint = TOKEN_MINTS[toToken.toUpperCase()];
-      if (!fromMint || !toMint) throw new Error(`Unsupported token pair: ${fromToken} → ${toToken}`);
-
-      const decimals = TOKEN_DECIMALS[fromToken.toUpperCase()] ?? 9;
-      const lamports = Math.floor(amount * Math.pow(10, decimals));
-
-      const url = `${JUPITER_QUOTE_URL}/quote?inputMint=${fromMint}&outputMint=${toMint}&amount=${lamports}&slippageBps=50`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Jupiter quote failed: HTTP ${res.status}`);
-      const quote = await res.json() as any;
-
-      const outDecimals = TOKEN_DECIMALS[toToken.toUpperCase()] ?? 6;
-      const outAmountFormatted = parseInt(quote.outAmount) / Math.pow(10, outDecimals);
-      const routePlan: string[] = (quote.routePlan || []).map((step: any) => step.swapInfo?.label || 'DEX');
-
+      const res = await api.getSwapQuote(fromToken, toToken, amount);
+      if (!res.success) throw new Error('Quote failed');
       setState({
         status: 'quoted',
-        outAmountFormatted: parseFloat(outAmountFormatted.toFixed(6)),
-        priceImpactPct: parseFloat(parseFloat(quote.priceImpactPct || '0').toFixed(4)),
-        routePlan: routePlan.length > 0 ? routePlan : ['Jupiter Aggregator'],
-        quoteResponse: quote,
+        outAmountFormatted: res.quote.outAmountFormatted,
+        priceImpactPct: res.quote.priceImpactPct,
+        routePlan: res.quote.routePlan,
+        quoteResponse: res.quote.quoteResponse,
       });
     } catch (err: any) {
       setState({ status: 'error', error: err.message });
@@ -137,23 +123,11 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
 
     setState(s => ({ ...s, status: 'building' }));
     try {
-      const swapRes = await fetch(`${JUPITER_QUOTE_URL}/swap`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          quoteResponse: state.quoteResponse,
-          userPublicKey: pubkey,
-          wrapAndUnwrapSol: true,
-          dynamicComputeUnitLimit: true,
-          prioritizationFeeLamports: 'auto',
-        }),
-      });
-      if (!swapRes.ok) throw new Error(`Jupiter swap failed: HTTP ${swapRes.status}`);
-      const swapData = await swapRes.json() as any;
+      const txRes = await api.buildSwapTransaction(state.quoteResponse, pubkey);
 
       setState(s => ({ ...s, status: 'signing' }));
 
-      const txBytes = Uint8Array.from(atob(swapData.swapTransaction), c => c.charCodeAt(0));
+      const txBytes = Uint8Array.from(atob(txRes.swapTransaction), c => c.charCodeAt(0));
       const { VersionedTransaction } = await import('@solana/web3.js');
       const transaction = VersionedTransaction.deserialize(txBytes);
 
