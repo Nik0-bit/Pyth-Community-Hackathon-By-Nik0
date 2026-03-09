@@ -65,7 +65,7 @@ const TOKEN_DECIMALS: Record<string, number> = {
 };
 
 interface SwapState {
-  status: 'idle' | 'quoting' | 'quoted' | 'building' | 'signing' | 'sent' | 'error';
+  status: 'idle' | 'quoting' | 'quoted' | 'building' | 'signing' | 'confirming' | 'confirmed' | 'failed_onchain' | 'error';
   outAmountFormatted?: number;
   priceImpactPct?: number;
   routePlan?: string[];
@@ -132,9 +132,43 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
       const transaction = VersionedTransaction.deserialize(txBytes);
 
       const result = await wallet.signAndSendTransaction(transaction);
-      const sig = result?.signature || result;
+      const sig = String(result?.signature || result);
 
-      setState(s => ({ ...s, status: 'sent', txSignature: String(sig) }));
+      setState(s => ({ ...s, status: 'confirming', txSignature: sig }));
+
+      // Poll Solana RPC for confirmation (max 60s)
+      const SOLANA_RPC = 'https://api.mainnet-beta.solana.com';
+      const startTime = Date.now();
+      let confirmed = false;
+      while (Date.now() - startTime < 60_000) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const rpcRes = await fetch(SOLANA_RPC, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1, method: 'getSignatureStatuses',
+              params: [[sig], { searchTransactionHistory: true }],
+            }),
+          });
+          const rpcData = await rpcRes.json();
+          const status = rpcData?.result?.value?.[0];
+          if (status) {
+            if (status.err) {
+              setState(s => ({ ...s, status: 'failed_onchain', error: JSON.stringify(status.err) }));
+            } else if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+              setState(s => ({ ...s, status: 'confirmed' }));
+            }
+            confirmed = true;
+            break;
+          }
+        } catch {
+          // RPC error, keep polling
+        }
+      }
+      if (!confirmed) {
+        setState(s => ({ ...s, status: 'failed_onchain', error: 'Timeout: transaction not confirmed after 60s. Check Solscan.' }));
+      }
     } catch (err: any) {
       setState(s => ({
         ...s,
@@ -150,7 +184,9 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
     quoted: <CheckCircle className="w-4 h-4 text-green-400" />,
     building: <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />,
     signing: <Loader2 className="w-4 h-4 animate-spin text-purple-400" />,
-    sent: <CheckCircle className="w-4 h-4 text-green-400" />,
+    confirming: <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />,
+    confirmed: <CheckCircle className="w-4 h-4 text-green-400" />,
+    failed_onchain: <AlertCircle className="w-4 h-4 text-red-400" />,
     error: <AlertCircle className="w-4 h-4 text-red-400" />,
   }[state.status];
 
@@ -160,7 +196,9 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
     quoted: 'Route found',
     building: 'Building transaction...',
     signing: 'Waiting for Phantom signature...',
-    sent: 'Transaction sent!',
+    confirming: 'Waiting for Solana confirmation...',
+    confirmed: 'Swap confirmed on-chain!',
+    failed_onchain: `On-chain failure: ${state.error || 'Transaction rejected by Solana'}`,
     error: state.error || 'Error',
   }[state.status];
 
@@ -223,12 +261,12 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
         </span>
       </div>
 
-      {state.status === 'sent' && state.txSignature && (
+      {['confirming', 'confirmed', 'failed_onchain'].includes(state.status) && state.txSignature && (
         <a
           href={`https://solscan.io/tx/${state.txSignature}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 mb-3"
+          className={`flex items-center gap-1 text-xs mb-3 ${state.status === 'confirmed' ? 'text-green-400 hover:text-green-300' : state.status === 'failed_onchain' ? 'text-red-400 hover:text-red-300' : 'text-cyan-400 hover:text-cyan-300'}`}
           style={{ fontFamily: 'JetBrains Mono, monospace' }}
         >
           <ExternalLink className="w-3 h-3" />
@@ -236,13 +274,13 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
         </a>
       )}
 
-      {state.status === 'error' && (
+      {(state.status === 'error' || state.status === 'failed_onchain') && (
         <button
           onClick={handleQuote}
           className="text-xs text-blue-400 hover:text-blue-300 underline mb-2"
           style={{ fontFamily: 'JetBrains Mono, monospace' }}
         >
-          Retry
+          Retry quote
         </button>
       )}
 
@@ -257,14 +295,14 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
         </Button>
       )}
 
-      {(state.status === 'quoting' || state.status === 'building' || state.status === 'signing') && (
+      {(state.status === 'quoting' || state.status === 'building' || state.status === 'signing' || state.status === 'confirming') && (
         <Button disabled className="w-full bg-gray-700 text-gray-400 text-sm py-2 rounded-lg">
           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          {state.status === 'quoting' ? 'Getting quote...' : state.status === 'building' ? 'Building tx...' : 'Waiting for signature...'}
+          {state.status === 'quoting' ? 'Getting quote...' : state.status === 'building' ? 'Building tx...' : state.status === 'confirming' ? 'Confirming on Solana...' : 'Waiting for signature...'}
         </Button>
       )}
 
-      {!walletPublicKey && state.status !== 'sent' && (
+      {!walletPublicKey && state.status !== 'confirmed' && (
         <p className="text-xs text-yellow-500 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
           ⚠ Connect your Phantom wallet to execute swaps
         </p>
