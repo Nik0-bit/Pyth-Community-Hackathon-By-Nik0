@@ -35,7 +35,9 @@ export async function fetchPythPrices(symbols: string[]): Promise<PythPrice[]> {
     if (ids.length > 0) {
       const url = `https://hermes.pyth.network/v2/updates/price/latest?${ids.map(id => `ids[]=${id}`).join('&')}`;
       try {
-        const res = await globalThis.fetch(url);
+        const headers: Record<string, string> = {};
+        if (process.env.PYTH_API_KEY) headers['x-api-key'] = process.env.PYTH_API_KEY;
+        const res = await globalThis.fetch(url, { headers });
         if (!res.ok) throw new Error(`Hermes HTTP ${res.status}`);
         const data = await res.json() as any;
         const parsed: any[] = data.parsed || [];
