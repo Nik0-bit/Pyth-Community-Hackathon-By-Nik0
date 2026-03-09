@@ -65,7 +65,25 @@ function parseHistoricalDate(text: string): number | null {
   return ts;
 }
 
-const HISTORICAL_SYMBOLS = ['BTC', 'ETH', 'SOL', 'PYTH', 'AVAX', 'BNB', 'ADA', 'JUP', 'USDC', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'XAUUSD'];
+const HISTORICAL_SYMBOLS = [
+  // Crypto
+  'BTC','ETH','SOL','XRP','BNB','ADA','DOGE','AVAX','DOT','SHIB','LINK','UNI','LTC','BCH','ATOM',
+  'FIL','ICP','APT','ARB','OP','NEAR','INJ','SUI','SEI','TIA','JTO','PYTH','JUP','WIF','BONK',
+  'PEPE','FLOKI','RENDER','TON','HBAR','TRX','ETC','XLM','ALGO','SAND','MANA','GRT','LDO','MKR',
+  'AAVE','SNX','SUSHI','1INCH','DYDX','GMX','CRV','COMP','YFI','VET','MASK','BAT','STORJ','QTUM',
+  'WAVES','HNT','ANKR','ICX','ZEC','DASH','ENJ','AXS','GALA','FET','LUNC','XTZ','IOTA','ZIL','USDC',
+  // Stocks
+  'AAPL','TSLA','NVDA','MSFT','GOOGL','AMZN','META','NFLX','AMD','INTC','COIN','PYPL','UBER','SNAP',
+  'BA','GS','JPM','BAC','C','MS','V','MA','WMT','TGT','COST','HD','LOW','NKE','SBUX','MCD','DIS',
+  'CMCSA','T','PFE','JNJ','AMGN','MRNA','CVX','XOM','CSCO','IBM','ORCL','SAP','CRM','NOW','PLTR',
+  'CRWD','DDOG','NET','ZS','SNOW','SHOP','EBAY','BABA','JD','PDD','NIO','XPEV','ABNB','RBLX',
+  'HOOD','SOFI','AFRM','LYFT','ASML',
+  // FX
+  'EURUSD','GBPUSD','AUDUSD','NZDUSD','USDJPY','USDCHF','USDCAD','USDSGD','USDHKD','USDCNH',
+  'USDKRW','USDTRY','USDBRL','USDMXN','USDINR','USDZAR','USDSEK','USDNOK','USDPLN',
+  // Metals
+  'XAUUSD','XAGUSD',
+];
 
 async function tryFetchHistoricalContext(messages: any[]): Promise<string> {
   const lastMsg: string = messages[messages.length - 1]?.content || '';

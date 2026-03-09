@@ -3,10 +3,30 @@ import { TrendingUp, TrendingDown, Activity, Wifi, WifiOff, Bell, Cpu } from 'lu
 import type { PythPrice } from '../services/apiService';
 
 const CATEGORIES = [
-  { key: 'crypto',  label: 'Crypto',  symbols: ['BTC','SOL','ETH','PYTH','USDC','BNB','ADA','JUP'] },
-  { key: 'stock',   label: 'Stocks',  symbols: ['AAPL','TSLA','NVDA','MSFT'] },
-  { key: 'fx',      label: 'FX',      symbols: ['EURUSD','GBPUSD'] },
-  { key: 'metal',   label: 'Metals',  symbols: ['XAUUSD'] },
+  { key: 'crypto', label: 'Crypto', symbols: [
+    'BTC','ETH','SOL','XRP','BNB','ADA','DOGE','AVAX','DOT','SHIB',
+    'LINK','UNI','LTC','BCH','ATOM','FIL','ICP','APT','ARB','OP',
+    'NEAR','INJ','SUI','SEI','TIA','JTO','PYTH','JUP','WIF','BONK',
+    'PEPE','FLOKI','RENDER','TON','HBAR','TRX','ETC','XLM','ALGO','SAND',
+    'MANA','GRT','LDO','MKR','AAVE','SNX','SUSHI','1INCH','DYDX','GMX',
+    'CRV','COMP','YFI','VET','MASK','BAT','FET','AXS','GALA','ENJ',
+    'WAVES','QTUM','HNT','DASH','ZEC','LUNC','XTZ','IOTA','ZIL','USDC',
+  ]},
+  { key: 'stock', label: 'Stocks', symbols: [
+    'AAPL','TSLA','NVDA','MSFT','GOOGL','AMZN','META','NFLX','AMD','INTC',
+    'COIN','PYPL','UBER','SNAP','BA','GS','JPM','BAC','C','MS',
+    'V','MA','WMT','TGT','COST','HD','LOW','NKE','SBUX','MCD',
+    'DIS','CMCSA','T','PFE','JNJ','AMGN','MRNA','CVX','XOM','CSCO',
+    'IBM','ORCL','SAP','CRM','NOW','PLTR','CRWD','DDOG','NET','ZS',
+    'SNOW','SHOP','EBAY','BABA','JD','PDD','NIO','XPEV','ABNB','RBLX',
+    'HOOD','SOFI','AFRM','LYFT','ASML',
+  ]},
+  { key: 'fx', label: 'FX', symbols: [
+    'EURUSD','GBPUSD','AUDUSD','NZDUSD','USDJPY','USDCHF','USDCAD',
+    'USDSGD','USDHKD','USDCNH','USDKRW','USDTRY','USDBRL','USDMXN',
+    'USDINR','USDZAR','USDSEK','USDNOK','USDPLN',
+  ]},
+  { key: 'metal', label: 'Metals', symbols: ['XAUUSD','XAGUSD'] },
 ];
 
 interface AlertCreatedCallback {
@@ -113,7 +133,7 @@ export function RightSidebar({ onQuickAlert }: RightSidebarProps) {
             <button
               key={cat.key}
               onClick={() => setActiveCategory(cat.key)}
-              className={`flex-1 py-1 text-xs rounded transition-all ${
+              className={`flex-1 py-1.5 text-xs rounded transition-all flex flex-col items-center gap-0.5 ${
                 activeCategory === cat.key
                   ? 'bg-blue-600 text-white font-bold'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
@@ -121,7 +141,10 @@ export function RightSidebar({ onQuickAlert }: RightSidebarProps) {
               style={{ fontFamily: 'Inter, sans-serif' }}
               data-testid={`tab-${cat.key}`}
             >
-              {cat.label}
+              <span>{cat.label}</span>
+              <span className={`text-[9px] ${activeCategory === cat.key ? 'text-blue-200' : 'text-gray-600'}`}>
+                {cat.symbols.length}
+              </span>
             </button>
           ))}
         </div>

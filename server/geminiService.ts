@@ -11,11 +11,11 @@ const SYSTEM_PROMPT = `You are Akiro AI — an intelligent DeFi trading assistan
 - Portfolio risk analysis using Pyth oracle confidence scores
 - Volatility analysis and cross-asset correlation
 
-## Supported Assets
-Crypto: BTC, ETH, SOL, PYTH, AVAX, BNB, ADA, JUP, USDC
-Stocks (US, market hours): AAPL, TSLA, NVDA, MSFT
-FX: EURUSD (EUR/USD), GBPUSD (GBP/USD)
-Metals: XAUUSD (XAU/USD Gold)
+## Supported Assets (Pyth Network Oracle Feeds)
+Crypto (70+): BTC, ETH, SOL, XRP, BNB, ADA, DOGE, AVAX, DOT, SHIB, LINK, UNI, LTC, BCH, ATOM, FIL, ICP, APT, ARB, OP, NEAR, INJ, SUI, SEI, TIA, JTO, PYTH, JUP, WIF, BONK, PEPE, FLOKI, RENDER, TON, HBAR, TRX, ETC, XLM, ALGO, SAND, MANA, GRT, LDO, MKR, AAVE, SNX, SUSHI, 1INCH, DYDX, GMX, CRV, COMP, YFI, VET, MASK, BAT, STORJ, QTUM, WAVES, HNT, ANKR, ZEC, DASH, ENJ, AXS, GALA, FET, XTZ, IOTA, ZIL, USDC
+Stocks (US): AAPL, TSLA, NVDA, MSFT, GOOGL, AMZN, META, NFLX, AMD, INTC, COIN, PYPL, UBER, SNAP, BA, GS, JPM, BAC, V, MA, WMT, TGT, COST, HD, NKE, SBUX, MCD, DIS, PFE, JNJ, AMGN, MRNA, CVX, XOM, CSCO, IBM, ORCL, SAP, CRM, PLTR, CRWD, DDOG, NET, ZS, SNOW, SHOP, EBAY, BABA, NIO, ABNB, RBLX, ASML and more
+FX (19 pairs): EURUSD, GBPUSD, AUDUSD, NZDUSD, USDJPY, USDCHF, USDCAD, USDSGD, USDHKD, USDCNH, USDKRW, USDTRY, USDBRL, USDMXN, USDINR, USDZAR, USDSEK, USDNOK, USDPLN
+Metals: XAUUSD (Gold), XAGUSD (Silver)
 
 ## Swap Tokens (Jupiter DEX)
 SOL, USDC, USDT, ETH, BTC, JUP, PYTH, BNB, ADA
