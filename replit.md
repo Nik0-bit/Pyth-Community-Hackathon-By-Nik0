@@ -5,10 +5,11 @@
 Akiro Labs is a professional DeFi trading terminal with a chat-based AI assistant interface. It's built as a full-stack web application that lets users interact with live cryptocurrency price data from the Pyth Network via natural language conversation. Key features include:
 
 - **AI Chat Terminal**: Users chat with "Akiro AI" (powered by Google Gemini) to get market analysis, price checks, and trading insights
-- **Live Price Feeds**: Real-time crypto prices (BTC, ETH, SOL, PYTH, AVAX, BNB, ADA, JUP, USDC) fetched from Pyth Network's Hermes API
-- **Price Alerts**: Users can set price alerts via natural language; alerts are tracked and can trigger email notifications via Resend
-- **Trading Tools**: Volatility analysis, confidence scoring, cross-asset correlation, swap routing (Jupiter DEX), and portfolio risk management
-- **Phantom Wallet Integration**: Connect Solana wallets via the browser extension
+- **SSE Live Price Feeds**: Real-time prices via Server-Sent Events (2.5s stream) for Crypto (9), Stocks (AAPL/TSLA/NVDA/MSFT), FX (EUR/USD, GBP/USD), Metals (Gold)
+- **Pyth Benchmarks**: Historical prices at specific timestamps via benchmarks.pyth.network API
+- **Real Jupiter Swaps**: AI detects swap intent → PrepareSwapCard fetches Jupiter quote from browser → user signs with Phantom → tx sent to Solana mainnet
+- **Price Alerts**: Set via natural language; alerts track conditions and trigger email notifications via Resend
+- **Phantom Wallet Integration**: Connect Solana wallets; public key passed to AI context and swap transactions
 
 The UI is styled as a dark terminal interface with a three-panel layout (left sidebar for alerts/wallet, center chat, right sidebar for live prices).
 

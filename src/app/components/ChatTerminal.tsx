@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, TrendingUp, BarChart3, Activity, Zap, AlertTriangle, Shield, Repeat, Bell, Code } from 'lucide-react';
+import { Send, TrendingUp, BarChart3, Activity, Zap, Shield, Repeat, Bell, Code, ExternalLink, CheckCircle, Loader2, AlertCircle, History } from 'lucide-react';
 import { Button } from './ui/button';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -7,8 +7,6 @@ import {
   ConfidenceAnalyzer,
   CrossAssetCorrelator,
   SmartSwapEngine,
-  LimitOrderManager,
-  RiskManager,
 } from '../utils/tradingTools';
 import {
   VolatilityCard,
@@ -18,14 +16,14 @@ import {
   LimitOrderCard,
   RiskCard,
 } from './MessageCards';
-import { api, type PriceAlert, type ChatMessage } from '../services/apiService';
+import { api, type PriceAlert, type ChatMessage, type SwapQuote } from '../services/apiService';
 
 interface Message {
   id: string;
   type: 'user' | 'ai';
   content: string;
   timestamp: Date;
-  component?: 'comparison' | 'chart' | 'priceCard' | 'volatility' | 'confidence' | 'correlation' | 'swap' | 'limitOrder' | 'risk' | 'alertCreated';
+  component?: 'comparison' | 'chart' | 'volatility' | 'confidence' | 'correlation' | 'swap' | 'limitOrder' | 'risk' | 'alertCreated' | 'prepareSwap';
   sourceData?: any;
 }
 
@@ -42,25 +40,277 @@ const thinkingStages: AIThinkingStatus[] = [
 ];
 
 const promptSuggestions = [
-  { icon: Bell, text: 'Alert me when SOL hits $150', gradient: 'from-purple-500 to-pink-600' },
+  { icon: Bell, text: 'Alert me when SOL hits $200', gradient: 'from-purple-500 to-pink-600' },
+  { icon: Repeat, text: 'Swap 1 SOL to USDC', gradient: 'from-blue-500 to-cyan-600' },
   { icon: TrendingUp, text: 'Check SOL volatility', gradient: 'from-green-500 to-emerald-600' },
   { icon: Shield, text: 'Analyze my portfolio risk', gradient: 'from-orange-500 to-red-600' },
-  { icon: Repeat, text: 'Swap 10 SOL to USDC', gradient: 'from-blue-500 to-cyan-600' },
-  { icon: Activity, text: 'Check BTC confidence score', gradient: 'from-yellow-500 to-orange-600' },
+  { icon: History, text: 'BTC price on Jan 1 2025', gradient: 'from-yellow-500 to-orange-600' },
   { icon: BarChart3, text: 'Correlate SOL and ETH', gradient: 'from-indigo-500 to-purple-600' },
 ];
+
+const JUPITER_QUOTE_URL = 'https://quote-api.jup.ag/v6';
+
+const TOKEN_MINTS: Record<string, string> = {
+  SOL:  'So11111111111111111111111111111111111111112',
+  USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  ETH:  '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
+  BTC:  '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E',
+  JUP:  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  PYTH: 'HZ1JovNiVvGrGs1X9UKNjJNBVxdqL4k6VWovxXN8YJHa',
+};
+
+const TOKEN_DECIMALS: Record<string, number> = {
+  SOL: 9, USDC: 6, USDT: 6, ETH: 8, BTC: 8, JUP: 6, PYTH: 6,
+};
+
+interface SwapState {
+  status: 'idle' | 'quoting' | 'quoted' | 'building' | 'signing' | 'sent' | 'error';
+  outAmountFormatted?: number;
+  priceImpactPct?: number;
+  routePlan?: string[];
+  quoteResponse?: any;
+  txSignature?: string;
+  error?: string;
+}
+
+interface PrepareSwapCardProps {
+  fromToken: string;
+  toToken: string;
+  amount: number;
+  walletPublicKey?: string;
+  note?: string;
+}
+
+function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: PrepareSwapCardProps) {
+  const [state, setState] = useState<SwapState>({ status: 'idle' });
+
+  const handleQuote = useCallback(async () => {
+    setState({ status: 'quoting' });
+    try {
+      const fromMint = TOKEN_MINTS[fromToken.toUpperCase()];
+      const toMint = TOKEN_MINTS[toToken.toUpperCase()];
+      if (!fromMint || !toMint) throw new Error(`Unsupported token pair: ${fromToken} → ${toToken}`);
+
+      const decimals = TOKEN_DECIMALS[fromToken.toUpperCase()] ?? 9;
+      const lamports = Math.floor(amount * Math.pow(10, decimals));
+
+      const url = `${JUPITER_QUOTE_URL}/quote?inputMint=${fromMint}&outputMint=${toMint}&amount=${lamports}&slippageBps=50`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Jupiter quote failed: HTTP ${res.status}`);
+      const quote = await res.json() as any;
+
+      const outDecimals = TOKEN_DECIMALS[toToken.toUpperCase()] ?? 6;
+      const outAmountFormatted = parseInt(quote.outAmount) / Math.pow(10, outDecimals);
+      const routePlan: string[] = (quote.routePlan || []).map((step: any) => step.swapInfo?.label || 'DEX');
+
+      setState({
+        status: 'quoted',
+        outAmountFormatted: parseFloat(outAmountFormatted.toFixed(6)),
+        priceImpactPct: parseFloat(parseFloat(quote.priceImpactPct || '0').toFixed(4)),
+        routePlan: routePlan.length > 0 ? routePlan : ['Jupiter Aggregator'],
+        quoteResponse: quote,
+      });
+    } catch (err: any) {
+      setState({ status: 'error', error: err.message });
+    }
+  }, [fromToken, toToken, amount]);
+
+  useEffect(() => {
+    handleQuote();
+  }, [handleQuote]);
+
+  const handleSign = useCallback(async () => {
+    if (!state.quoteResponse) return;
+
+    const wallet = (window as any).solana;
+    if (!wallet?.isConnected && !walletPublicKey) {
+      setState(s => ({ ...s, status: 'error', error: 'Phantom wallet not connected. Connect your wallet first.' }));
+      return;
+    }
+
+    const pubkey = walletPublicKey || wallet?.publicKey?.toString();
+    if (!pubkey) {
+      setState(s => ({ ...s, status: 'error', error: 'Wallet public key not available.' }));
+      return;
+    }
+
+    setState(s => ({ ...s, status: 'building' }));
+    try {
+      const swapRes = await fetch(`${JUPITER_QUOTE_URL}/swap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteResponse: state.quoteResponse,
+          userPublicKey: pubkey,
+          wrapAndUnwrapSol: true,
+          dynamicComputeUnitLimit: true,
+          prioritizationFeeLamports: 'auto',
+        }),
+      });
+      if (!swapRes.ok) throw new Error(`Jupiter swap failed: HTTP ${swapRes.status}`);
+      const swapData = await swapRes.json() as any;
+
+      setState(s => ({ ...s, status: 'signing' }));
+
+      const txBytes = Uint8Array.from(atob(swapData.swapTransaction), c => c.charCodeAt(0));
+      const { VersionedTransaction } = await import('@solana/web3.js');
+      const transaction = VersionedTransaction.deserialize(txBytes);
+
+      const result = await wallet.signAndSendTransaction(transaction);
+      const sig = result?.signature || result;
+
+      setState(s => ({ ...s, status: 'sent', txSignature: String(sig) }));
+    } catch (err: any) {
+      setState(s => ({
+        ...s,
+        status: 'error',
+        error: err.message?.includes('User rejected') ? 'Transaction rejected by user.' : err.message,
+      }));
+    }
+  }, [state.quoteResponse, walletPublicKey]);
+
+  const statusIcon = {
+    idle: null,
+    quoting: <Loader2 className="w-4 h-4 animate-spin text-blue-400" />,
+    quoted: <CheckCircle className="w-4 h-4 text-green-400" />,
+    building: <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />,
+    signing: <Loader2 className="w-4 h-4 animate-spin text-purple-400" />,
+    sent: <CheckCircle className="w-4 h-4 text-green-400" />,
+    error: <AlertCircle className="w-4 h-4 text-red-400" />,
+  }[state.status];
+
+  const statusText = {
+    idle: 'Preparing...',
+    quoting: 'Getting best route from Jupiter...',
+    quoted: 'Route found',
+    building: 'Building transaction...',
+    signing: 'Waiting for Phantom signature...',
+    sent: 'Transaction sent!',
+    error: state.error || 'Error',
+  }[state.status];
+
+  return (
+    <motion.div
+      initial={{ scale: 0.95, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      className="mt-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-2 border-blue-500/40 rounded-lg p-4"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Repeat className="w-4 h-4 text-blue-400" />
+        <span className="text-sm font-bold text-blue-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          JUPITER SWAP
+        </span>
+      </div>
+
+      {note && (
+        <p className="text-xs text-gray-400 mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>{note}</p>
+      )}
+
+      <div className="flex items-center justify-between bg-gray-900/60 rounded-lg p-3 mb-3">
+        <div className="text-center">
+          <div className="text-xs text-gray-500 mb-1">FROM</div>
+          <div className="text-lg font-bold text-white" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            {amount} {fromToken}
+          </div>
+        </div>
+        <div className="text-blue-400">→</div>
+        <div className="text-center">
+          <div className="text-xs text-gray-500 mb-1">TO</div>
+          <div className="text-lg font-bold text-cyan-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            {state.outAmountFormatted ? `≈ ${state.outAmountFormatted.toFixed(4)} ${toToken}` : toToken}
+          </div>
+        </div>
+      </div>
+
+      {state.quoteResponse && state.status !== 'error' && (
+        <div className="space-y-1 mb-3 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="flex justify-between text-gray-400">
+            <span>Price Impact</span>
+            <span className={(state.priceImpactPct ?? 0) > 1 ? 'text-red-400' : 'text-green-400'}>
+              {(state.priceImpactPct ?? 0) < 0.01 ? '< 0.01%' : `${(state.priceImpactPct ?? 0).toFixed(2)}%`}
+            </span>
+          </div>
+          <div className="flex justify-between text-gray-400">
+            <span>Route</span>
+            <span className="text-blue-400">{(state.routePlan ?? []).slice(0, 2).join(' → ')}</span>
+          </div>
+          <div className="flex justify-between text-gray-400">
+            <span>Slippage</span>
+            <span>0.5%</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 mb-3">
+        {statusIcon}
+        <span className="text-xs text-gray-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          {statusText}
+        </span>
+      </div>
+
+      {state.status === 'sent' && state.txSignature && (
+        <a
+          href={`https://solscan.io/tx/${state.txSignature}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 mb-3"
+          style={{ fontFamily: 'JetBrains Mono, monospace' }}
+        >
+          <ExternalLink className="w-3 h-3" />
+          View on Solscan: {state.txSignature.slice(0, 16)}...
+        </a>
+      )}
+
+      {state.status === 'error' && (
+        <button
+          onClick={handleQuote}
+          className="text-xs text-blue-400 hover:text-blue-300 underline mb-2"
+          style={{ fontFamily: 'JetBrains Mono, monospace' }}
+        >
+          Retry
+        </button>
+      )}
+
+      {(state.status === 'quoted') && (
+        <Button
+          onClick={handleSign}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded-lg transition-all"
+          data-testid="sign-swap-button"
+        >
+          <Zap className="w-4 h-4 mr-2" />
+          Sign & Send via Phantom
+        </Button>
+      )}
+
+      {(state.status === 'quoting' || state.status === 'building' || state.status === 'signing') && (
+        <Button disabled className="w-full bg-gray-700 text-gray-400 text-sm py-2 rounded-lg">
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          {state.status === 'quoting' ? 'Getting quote...' : state.status === 'building' ? 'Building tx...' : 'Waiting for signature...'}
+        </Button>
+      )}
+
+      {!walletPublicKey && state.status !== 'sent' && (
+        <p className="text-xs text-yellow-500 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+          ⚠ Connect your Phantom wallet to execute swaps
+        </p>
+      )}
+    </motion.div>
+  );
+}
 
 interface ChatTerminalProps {
   onAlertCreated?: (alert: PriceAlert) => void;
   defaultEmail?: string;
+  walletPublicKey?: string;
 }
 
-export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps) {
+export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: ChatTerminalProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       type: 'ai',
-      content: 'Welcome to Akiro Labs Terminal. I\'m your AI trading assistant powered by Pyth Network real-time oracles on Solana.\n\n🔧 Available Capabilities:\n• Real-time price feeds via Pyth Network Hermes API\n• Price alerts with email notifications\n• Volatility Engine & Confidence Score analysis\n• Cross-Asset Correlation detection\n• Smart Swap routing via Jupiter DEX\n• Portfolio Risk Management\n• Limit Order Bot with Pyth monitoring\n\nAsk me anything — in English or Russian!',
+      content: 'Welcome to Akiro Labs Terminal. I\'m your AI trading assistant powered by Pyth Network real-time oracles on Solana.\n\n> Capabilities:\n• Real-time price feeds: crypto, stocks (AAPL, TSLA, NVDA, MSFT), FX (EUR/USD, GBP/USD), gold\n• Price alerts with email notifications\n• Historical prices via Pyth Benchmarks\n• Real Jupiter DEX swaps (sign with Phantom)\n• Volatility & correlation analysis\n• Portfolio risk management\n\nAsk me anything — in English or Russian!',
       timestamp: new Date(),
     },
   ]);
@@ -110,7 +360,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
     ];
 
     try {
-      const response = await api.chat(newHistory, defaultEmail);
+      const response = await api.chat(newHistory, defaultEmail, walletPublicKey);
 
       if (response.success) {
         setChatHistory([
@@ -127,6 +377,9 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
           onAlertCreated?.(response.alert);
         } else if (response.action?.action === 'create_alert') {
           component = 'alertCreated';
+          sourceData = response.action;
+        } else if (response.action?.action === 'prepare_swap') {
+          component = 'prepareSwap';
           sourceData = response.action;
         }
 
@@ -155,7 +408,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
         const symbol = lowerText.includes('btc') ? 'BTC' : lowerText.includes('eth') ? 'ETH' : 'SOL';
         const mockChange = symbol === 'BTC' ? 2.3 : symbol === 'ETH' ? 4.7 : 5.6;
         const analysis = await VolatilityEngine.quickAnalyze(symbol, mockChange);
-        fallbackContent = `> ✓ Volatility Engine running\n> ✓ Risk metrics calculated\n\n📊 Analysis for ${symbol} (cached data)`;
+        fallbackContent = `> ✓ Volatility Engine running\n> ✓ Risk metrics calculated\n\n📊 Analysis for ${symbol}`;
         fallbackComponent = 'volatility';
         fallbackSourceData = analysis;
       } else if (lowerText.includes('confidence') || lowerText.includes('oracle')) {
@@ -176,7 +429,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
         fallbackComponent = 'correlation';
         fallbackSourceData = corr;
       } else {
-        fallbackContent = `> ⚠️ AI service temporarily unavailable\n\nI can still run local analysis tools:\n• Volatility Engine\n• Confidence Analyzer\n• Smart Swap Preview\n• Correlation Analysis\n\nOr check the Pyth price feeds on the right panel.\n\nError: ${err.message}`;
+        fallbackContent = `> ⚠️ AI service temporarily unavailable\n\nLocal analysis tools still available:\n• Volatility Engine\n• Confidence Analyzer\n• Correlation Analysis\n\nError: ${err.message}`;
       }
 
       const fallbackMsg: Message = {
@@ -191,7 +444,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
     } finally {
       setIsTyping(false);
     }
-  }, [inputValue, isTyping, chatHistory, onAlertCreated, addMessage]);
+  }, [inputValue, isTyping, chatHistory, onAlertCreated, addMessage, defaultEmail, walletPublicKey]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -312,40 +565,33 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
                 </motion.div>
               )}
 
+              {message.component === 'prepareSwap' && message.sourceData && (
+                <PrepareSwapCard
+                  fromToken={message.sourceData.fromToken}
+                  toToken={message.sourceData.toToken}
+                  amount={message.sourceData.amount}
+                  walletPublicKey={walletPublicKey}
+                  note={message.sourceData.note}
+                />
+              )}
+
               {message.component === 'volatility' && message.sourceData && (
-                <div className="mt-4">
-                  <VolatilityCard data={message.sourceData} />
-                </div>
+                <div className="mt-4"><VolatilityCard data={message.sourceData} /></div>
               )}
-
               {message.component === 'confidence' && message.sourceData && (
-                <div className="mt-4">
-                  <ConfidenceCard data={message.sourceData} />
-                </div>
+                <div className="mt-4"><ConfidenceCard data={message.sourceData} /></div>
               )}
-
               {message.component === 'correlation' && message.sourceData && (
-                <div className="mt-4">
-                  <CorrelationCard data={message.sourceData} />
-                </div>
+                <div className="mt-4"><CorrelationCard data={message.sourceData} /></div>
               )}
-
               {message.component === 'swap' && message.sourceData && (
-                <div className="mt-4">
-                  <SwapCard data={message.sourceData} />
-                </div>
+                <div className="mt-4"><SwapCard data={message.sourceData} /></div>
               )}
-
               {message.component === 'limitOrder' && message.sourceData && (
-                <div className="mt-4">
-                  <LimitOrderCard data={message.sourceData} />
-                </div>
+                <div className="mt-4"><LimitOrderCard data={message.sourceData} /></div>
               )}
-
               {message.component === 'risk' && message.sourceData && (
-                <div className="mt-4">
-                  <RiskCard data={message.sourceData} />
-                </div>
+                <div className="mt-4"><RiskCard data={message.sourceData} /></div>
               )}
 
               {message.component === 'comparison' && message.sourceData && (
@@ -385,23 +631,14 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
                 <div className="mt-4 border-2 border-purple-500/30 rounded-lg p-4 bg-purple-500/5">
                   <div className="flex items-center gap-2 mb-3">
                     <TrendingUp className="w-4 h-4 text-green-400" />
-                    <span className="text-sm text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
-                      7-Day Trend Analysis
-                    </span>
+                    <span className="text-sm text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>7-Day Trend</span>
                   </div>
                   <div className="grid grid-cols-7 gap-2 h-32">
                     {message.sourceData.chartData.map((height: number, idx: number) => (
                       <div key={idx} className="flex flex-col justify-end items-center gap-1">
-                        <div className="text-xs text-gray-500 mb-1" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                          {height}%
-                        </div>
-                        <div
-                          className="w-full bg-gradient-to-t from-purple-500 to-blue-500 rounded-t"
-                          style={{ height: `${height}%` }}
-                        />
-                        <span className="text-xs text-gray-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                          D{idx + 1}
-                        </span>
+                        <div className="text-xs text-gray-500 mb-1" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{height}%</div>
+                        <div className="w-full bg-gradient-to-t from-purple-500 to-blue-500 rounded-t" style={{ height: `${height}%` }} />
+                        <span className="text-xs text-gray-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>D{idx + 1}</span>
                       </div>
                     ))}
                   </div>
@@ -476,7 +713,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about prices, set alerts, analyze risk... (Enter to send)"
+              placeholder="Ask about prices, swap tokens, set alerts, check history... (Enter to send)"
               rows={1}
               className="w-full bg-gray-900/80 border-2 border-gray-700 focus:border-purple-500 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 resize-none transition-colors focus:outline-none"
               style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.9rem', minHeight: '48px', maxHeight: '120px' }}
@@ -494,11 +731,16 @@ export function ChatTerminal({ onAlertCreated, defaultEmail }: ChatTerminalProps
         </div>
         <div className="flex items-center gap-4 mt-2">
           <span className="text-xs text-gray-600" style={{ fontFamily: 'Inter, sans-serif' }}>
-            Powered by Pyth Network · Gemini AI · Solana
+            Powered by Pyth Network · Gemini AI · Jupiter DEX · Solana
           </span>
           {defaultEmail && (
             <span className="text-xs text-blue-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
               📧 {defaultEmail}
+            </span>
+          )}
+          {walletPublicKey && (
+            <span className="text-xs text-green-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              ◎ {walletPublicKey.slice(0, 6)}...{walletPublicKey.slice(-4)}
             </span>
           )}
         </div>

@@ -6,6 +6,30 @@ export interface PythPrice {
   change24h: number;
   publishTime: number;
   feedId: string;
+  category: 'crypto' | 'stock' | 'fx' | 'metal';
+}
+
+export interface HistoricalPrice {
+  symbol: string;
+  pair: string;
+  price: number;
+  confidence: number;
+  timestamp: number;
+  feedId: string;
+}
+
+export interface SwapQuote {
+  inputMint: string;
+  outputMint: string;
+  inputToken: string;
+  outputToken: string;
+  inAmount: number;
+  outAmount: number;
+  outAmountFormatted: number;
+  priceImpactPct: number;
+  routePlan: string[];
+  slippageBps: number;
+  quoteResponse: any;
 }
 
 export type AlertCondition = 'above' | 'below';
@@ -60,10 +84,28 @@ export const api = {
     return req(`/pyth/price/${symbol}`);
   },
 
-  async chat(messages: ChatMessage[], defaultEmail?: string): Promise<ChatResponse> {
+  async getHistoricalPrice(symbol: string, timestamp: number): Promise<{ success: boolean; price: HistoricalPrice }> {
+    return req(`/pyth/history?symbol=${symbol}&timestamp=${timestamp}`);
+  },
+
+  async chat(messages: ChatMessage[], defaultEmail?: string, walletPublicKey?: string): Promise<ChatResponse> {
     return req('/chat', {
       method: 'POST',
-      body: JSON.stringify({ messages, defaultEmail }),
+      body: JSON.stringify({ messages, defaultEmail, walletPublicKey }),
+    });
+  },
+
+  async getSwapQuote(fromToken: string, toToken: string, amount: number, slippageBps = 50): Promise<{ success: boolean; quote: SwapQuote }> {
+    return req('/swap/quote', {
+      method: 'POST',
+      body: JSON.stringify({ fromToken, toToken, amount, slippageBps }),
+    });
+  },
+
+  async buildSwapTransaction(quoteResponse: any, userPublicKey: string): Promise<{ success: boolean; swapTransaction: string; lastValidBlockHeight: number }> {
+    return req('/swap/transaction', {
+      method: 'POST',
+      body: JSON.stringify({ quoteResponse, userPublicKey }),
     });
   },
 
@@ -92,7 +134,6 @@ export const api = {
     to: string;
     subject: string;
     html: string;
-    resendApiKey?: string;
   }): Promise<{ success: boolean; id?: string }> {
     return req('/email', {
       method: 'POST',

@@ -1,6 +1,12 @@
-import type { Express } from 'express';
+import type { Express, Request, Response } from 'express';
 import type { Server } from 'http';
-import { fetchPythPrices, fetchSinglePrice, getAllSupportedSymbols } from './pythService.js';
+import {
+  fetchPythPrices,
+  fetchSinglePrice,
+  fetchHistoricalPrice,
+  getAllSupportedSymbols,
+  getSymbolsByCategory,
+} from './pythService.js';
 import { chat } from './geminiService.js';
 import {
   createAlert,
@@ -11,6 +17,7 @@ import {
   checkAlertCondition,
   getActiveAlerts,
 } from './alertStore.js';
+import { getSwapQuote, buildSwapTransaction, getSupportedSwapTokens } from './jupiterService.js';
 import { Resend } from 'resend';
 
 export async function registerRoutes(httpServer: Server, app: Express) {
@@ -45,16 +52,66 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  // SSE streaming endpoint — pushes fresh prices every 2.5 seconds
+  app.get('/api/pyth/stream', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const category = req.query.category ? String(req.query.category) : 'crypto';
+    const symbols = req.query.symbols
+      ? String(req.query.symbols).split(',')
+      : getSymbolsByCategory(category as any);
+
+    let active = true;
+
+    const push = async () => {
+      if (!active) return;
+      try {
+        const prices = await fetchPythPrices(symbols, true);
+        res.write(`data: ${JSON.stringify({ prices, ts: Date.now() })}\n\n`);
+      } catch {
+        res.write(`data: ${JSON.stringify({ error: 'fetch failed' })}\n\n`);
+      }
+    };
+
+    push();
+    const iv = setInterval(push, 2500);
+
+    req.on('close', () => {
+      active = false;
+      clearInterval(iv);
+    });
+  });
+
+  // Pyth Benchmarks — historical price at a specific timestamp
+  app.get('/api/pyth/history', async (req, res) => {
+    try {
+      const symbol = String(req.query.symbol || '');
+      const ts = parseInt(String(req.query.timestamp || '0'));
+      if (!symbol || !ts) {
+        return res.status(400).json({ success: false, error: 'symbol and timestamp required' });
+      }
+      const price = await fetchHistoricalPrice(symbol, ts);
+      if (!price) return res.status(404).json({ success: false, error: 'No data for that timestamp' });
+      res.json({ success: true, price });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.post('/api/chat', async (req, res) => {
     try {
-      const { messages, defaultEmail } = req.body;
+      const { messages, defaultEmail, walletPublicKey } = req.body;
       if (!Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ success: false, error: 'messages array required' });
       }
 
       const symbols = getAllSupportedSymbols();
       const pythPrices = await fetchPythPrices(symbols);
-      const result = await chat(messages, pythPrices, defaultEmail);
+      const result = await chat(messages, pythPrices, defaultEmail, walletPublicKey);
 
       if (result.action?.action === 'create_alert') {
         const a = result.action;
@@ -78,11 +135,50 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         });
       }
 
+      if (result.action?.action === 'prepare_swap') {
+        return res.json({
+          success: true,
+          content: result.content,
+          action: result.action,
+        });
+      }
+
       res.json({ success: true, content: result.content, action: result.action });
     } catch (err: any) {
       console.error('[Chat] error:', err);
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  // Jupiter swap endpoints
+  app.post('/api/swap/quote', async (req, res) => {
+    try {
+      const { fromToken, toToken, amount, slippageBps } = req.body;
+      if (!fromToken || !toToken || !amount) {
+        return res.status(400).json({ success: false, error: 'fromToken, toToken, amount required' });
+      }
+      const quote = await getSwapQuote(fromToken, toToken, parseFloat(amount), slippageBps ?? 50);
+      res.json({ success: true, quote });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/swap/transaction', async (req, res) => {
+    try {
+      const { quoteResponse, userPublicKey } = req.body;
+      if (!quoteResponse || !userPublicKey) {
+        return res.status(400).json({ success: false, error: 'quoteResponse and userPublicKey required' });
+      }
+      const tx = await buildSwapTransaction(quoteResponse, userPublicKey);
+      res.json({ success: true, ...tx });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/swap/tokens', (_req, res) => {
+    res.json({ success: true, tokens: getSupportedSwapTokens() });
   });
 
   app.get('/api/alerts', (_req, res) => {
@@ -117,14 +213,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post('/api/email', async (req, res) => {
     try {
-      const { to, subject, html, resendApiKey } = req.body;
+      const { to, subject, html } = req.body;
       if (!to || !subject || !html) {
         return res.status(400).json({ success: false, error: 'to, subject, html required' });
       }
 
-      const apiKey = resendApiKey || process.env.RESEND_API_KEY;
+      const apiKey = process.env.RESEND_API_KEY;
       if (!apiKey) {
-        return res.status(400).json({ success: false, error: 'Resend API key not configured. Add RESEND_API_KEY to secrets.' });
+        return res.status(400).json({ success: false, error: 'RESEND_API_KEY not configured.' });
       }
 
       const resend = new Resend(apiKey);

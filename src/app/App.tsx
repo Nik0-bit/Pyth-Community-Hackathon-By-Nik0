@@ -115,6 +115,7 @@ export default function App() {
         <ChatTerminal
           onAlertCreated={handleNewAlert}
           defaultEmail={defaultEmail}
+          walletPublicKey={walletAddress}
         />
         <RightSidebar onQuickAlert={handleQuickAlert} />
       </div>
