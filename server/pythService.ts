@@ -54,7 +54,6 @@ export const PYTH_PRICE_IDS: Record<string, string> = {
   MANA:   '0x1dfffdcbc958d732750f53ff7f06d24bb01364b3f62abea511a390c74b8d16a5',
   GRT:    '0x4d1f8dae0d96236fb98e8f47471a366ec3b1732b47041781934ca3a9bb2f35e7',
   LDO:    '0xc63e2a7f37a04e5e614c07238bedb25dcc38927fba8fe890597a593c0b2fa4ad',
-  MKR:    '0x9375299e31c0deb9c6bc378e6329aab44cb48ec655552a70d4b9050346a1ab7f',
   AAVE:   '0x2b9ab1e972a281585084148ba1389800799bd4be63b957507db1349314e47445',
   SNX:    '0x39d020f60982ed892abbcd4a06a276a9f9b7bfbce003204c110b6e488f502da3',
   SUSHI:  '0x26e4f737fde0263a9eea10ae63ac36dcedab2aaf629261a994e1eeb6ee0afe53',
@@ -188,7 +187,7 @@ const SYMBOL_CATEGORY: Record<string, PythPrice['category']> = {
   JTO: 'crypto', PYTH: 'crypto', JUP: 'crypto', WIF: 'crypto', BONK: 'crypto',
   PEPE: 'crypto', FLOKI: 'crypto', RENDER: 'crypto', TON: 'crypto', HBAR: 'crypto',
   TRX: 'crypto', ETC: 'crypto', XLM: 'crypto', ALGO: 'crypto', SAND: 'crypto',
-  MANA: 'crypto', GRT: 'crypto', LDO: 'crypto', MKR: 'crypto', AAVE: 'crypto',
+  MANA: 'crypto', GRT: 'crypto', LDO: 'crypto', AAVE: 'crypto',
   SNX: 'crypto', SUSHI: 'crypto', '1INCH': 'crypto', DYDX: 'crypto', GMX: 'crypto',
   CRV: 'crypto', COMP: 'crypto', YFI: 'crypto', VET: 'crypto', MASK: 'crypto',
   BAT: 'crypto', STORJ: 'crypto', QTUM: 'crypto', WAVES: 'crypto', HNT: 'crypto',
@@ -230,11 +229,39 @@ const SYMBOL_PAIR: Record<string, string> = {
 
 const priceCache: Record<string, { data: PythPrice; ts: number }> = {};
 const CACHE_TTL = 2500;
+const knownBadIds = new Set<string>();
 
 async function hermesHeaders(): Promise<Record<string, string>> {
   const h: Record<string, string> = {};
   if (process.env.PYTH_API_KEY) h['x-api-key'] = process.env.PYTH_API_KEY;
   return h;
+}
+
+async function fetchHermesBatch(ids: string[]): Promise<any[]> {
+  const validIds = ids.filter(id => !knownBadIds.has(id));
+  if (validIds.length === 0) return [];
+
+  const url = `https://hermes.pyth.network/v2/updates/price/latest?${validIds.map(id => `ids[]=${id}`).join('&')}`;
+  const headers = await hermesHeaders();
+  const res = await globalThis.fetch(url, { headers });
+
+  if (!res.ok) {
+    const body = await res.text();
+    // Parse "Price ids not found: 0x..." to blacklist bad ID and retry
+    const match = body.match(/Price ids not found:\s*(0x[a-f0-9]+)/i);
+    if (match && res.status === 404) {
+      const badId = match[1];
+      knownBadIds.add(badId);
+      console.warn(`[Pyth] Blacklisting invalid feed ID: ${badId}`);
+      const retryIds = validIds.filter(id => id !== badId);
+      if (retryIds.length === 0) return [];
+      return fetchHermesBatch(retryIds);
+    }
+    throw new Error(`Hermes HTTP ${res.status}: ${body.slice(0, 100)}`);
+  }
+
+  const data = await res.json() as any;
+  return data.parsed || [];
 }
 
 export async function fetchPythPrices(symbols: string[], bypassCache = false): Promise<PythPrice[]> {
@@ -247,19 +274,14 @@ export async function fetchPythPrices(symbols: string[], bypassCache = false): P
       });
 
   if (toFetch.length > 0) {
-    // Batch in groups of 100 to stay within URL limits
-    const BATCH = 100;
+    // Batch in groups of 50 to stay well within URL limits
+    const BATCH = 50;
     for (let i = 0; i < toFetch.length; i += BATCH) {
       const chunk = toFetch.slice(i, i + BATCH);
       const ids = chunk.map(s => PYTH_PRICE_IDS[s]).filter(Boolean);
       if (ids.length === 0) continue;
-      const url = `https://hermes.pyth.network/v2/updates/price/latest?${ids.map(id => `ids[]=${id}`).join('&')}`;
       try {
-        const headers = await hermesHeaders();
-        const res = await globalThis.fetch(url, { headers });
-        if (!res.ok) throw new Error(`Hermes HTTP ${res.status}`);
-        const data = await res.json() as any;
-        const parsed: any[] = data.parsed || [];
+        const parsed = await fetchHermesBatch(ids);
 
         for (const item of parsed) {
           const feedId = '0x' + item.id;

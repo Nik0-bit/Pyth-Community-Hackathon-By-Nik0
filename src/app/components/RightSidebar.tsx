@@ -8,7 +8,7 @@ const CATEGORIES = [
     'LINK','UNI','LTC','BCH','ATOM','FIL','ICP','APT','ARB','OP',
     'NEAR','INJ','SUI','SEI','TIA','JTO','PYTH','JUP','WIF','BONK',
     'PEPE','FLOKI','RENDER','TON','HBAR','TRX','ETC','XLM','ALGO','SAND',
-    'MANA','GRT','LDO','MKR','AAVE','SNX','SUSHI','1INCH','DYDX','GMX',
+    'MANA','GRT','LDO','AAVE','SNX','SUSHI','1INCH','DYDX','GMX',
     'CRV','COMP','YFI','VET','MASK','BAT','FET','AXS','GALA','ENJ',
     'WAVES','QTUM','HNT','DASH','ZEC','LUNC','XTZ','IOTA','ZIL','USDC',
   ]},
