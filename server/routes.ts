@@ -20,6 +20,79 @@ import {
 import { getSwapQuote, buildSwapTransaction, getSupportedSwapTokens } from './jupiterService.js';
 import { Resend } from 'resend';
 
+const MONTH_MAP: Record<string, number> = {
+  jan: 0, january: 0, янв: 0, января: 0,
+  feb: 1, february: 1, фев: 1, февраля: 1,
+  mar: 2, march: 2, март: 2, марта: 2,
+  apr: 3, april: 3, апр: 3, апреля: 3,
+  may: 4, май: 4, мая: 4, мае: 4,
+  jun: 5, june: 5, июн: 5, июня: 5, июне: 5,
+  jul: 6, july: 6, июл: 6, июля: 6, июле: 6,
+  aug: 7, august: 7, авг: 7, августа: 7,
+  sep: 8, september: 8, сен: 8, сентября: 8,
+  oct: 9, october: 9, окт: 9, октября: 9,
+  nov: 10, november: 10, ноя: 10, ноября: 10,
+  dec: 11, december: 11, дек: 11, декабря: 11,
+};
+
+function parseHistoricalDate(text: string): number | null {
+  const lower = text.toLowerCase();
+  let d: Date | null = null;
+
+  const isoMatch = lower.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    d = new Date(Date.UTC(+isoMatch[1], +isoMatch[2] - 1, +isoMatch[3]));
+  }
+
+  if (!d) {
+    const mdy = lower.match(/([a-zа-яё]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})/);
+    if (mdy && MONTH_MAP[mdy[1]] !== undefined) {
+      d = new Date(Date.UTC(+mdy[3], MONTH_MAP[mdy[1]], +mdy[2]));
+    }
+  }
+
+  if (!d) {
+    const dmy = lower.match(/(\d{1,2})\s+([a-zа-яё]+)\s+(\d{4})/);
+    if (dmy && MONTH_MAP[dmy[2]] !== undefined) {
+      d = new Date(Date.UTC(+dmy[3], MONTH_MAP[dmy[2]], +dmy[1]));
+    }
+  }
+
+  if (!d) return null;
+  if (isNaN(d.getTime())) return null;
+  const ts = Math.floor(d.getTime() / 1000);
+  if (ts > Math.floor(Date.now() / 1000) - 3600) return null;
+  return ts;
+}
+
+const HISTORICAL_SYMBOLS = ['BTC', 'ETH', 'SOL', 'PYTH', 'AVAX', 'BNB', 'ADA', 'JUP', 'USDC', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'XAUUSD'];
+
+async function tryFetchHistoricalContext(messages: any[]): Promise<string> {
+  const lastMsg: string = messages[messages.length - 1]?.content || '';
+  const lower = lastMsg.toLowerCase();
+
+  const hasDateKeyword = Object.keys(MONTH_MAP).some(k => lower.includes(k)) ||
+    /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(lower) || /\b20\d{2}\b/.test(lower);
+  if (!hasDateKeyword) return '';
+
+  const symbol = HISTORICAL_SYMBOLS.find(s => lower.includes(s.toLowerCase()));
+  if (!symbol) return '';
+
+  const timestamp = parseHistoricalDate(lastMsg);
+  if (!timestamp) return '';
+
+  try {
+    const hist = await fetchHistoricalPrice(symbol, timestamp);
+    if (!hist) return '';
+    const dateStr = new Date(timestamp * 1000).toUTCString();
+    return `\n\n[PYTH BENCHMARKS HISTORICAL DATA — USE THIS IN YOUR ANSWER]\n` +
+      `${hist.pair} on ${dateStr}: $${hist.price.toFixed(2)} (±$${hist.confidence.toFixed(2)} confidence)\n` +
+      `Source: Pyth Network Benchmarks API (verified oracle data, timestamp: ${timestamp})`;
+  } catch {
+    return '';
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -110,8 +183,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       }
 
       const symbols = getAllSupportedSymbols();
-      const pythPrices = await fetchPythPrices(symbols);
-      const result = await chat(messages, pythPrices, defaultEmail, walletPublicKey);
+      const [pythPrices, historicalContext] = await Promise.all([
+        fetchPythPrices(symbols),
+        tryFetchHistoricalContext(messages),
+      ]);
+      const result = await chat(messages, pythPrices, defaultEmail, walletPublicKey, historicalContext);
 
       if (result.action?.action === 'create_alert') {
         const a = result.action;

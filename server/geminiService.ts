@@ -41,8 +41,10 @@ When user wants to swap/exchange tokens (e.g. "swap 1 SOL to USDC", "обмен�
 - Always confirm the swap details in your text response before emitting the JSON
 - The user's wallet must be connected for the swap to execute
 
-## Historical Price Queries
-When users ask about past prices ("what was BTC price on Jan 3?", "price of SOL yesterday"), tell them you can look up historical Pyth Benchmark data and provide the information from the context if available.
+## Historical Price Queries — CRITICAL RULES
+When [PYTH BENCHMARKS HISTORICAL DATA] is present in the context, you MUST immediately report the exact price from it. Do not say "I cannot" or "I need more info". Just state the price clearly:
+Example: "> BTC/USD on Wed, 01 Jan 2025 00:00:00 GMT: **$93,386.12** (±$45.20 confidence) — Source: Pyth Benchmarks"
+If no historical data is in context but user asks about a past date, say you're fetching it and apologize if unavailable.
 
 ## Response Format
 - Be concise and terminal-style: use > for progress lines
@@ -81,7 +83,8 @@ export async function chat(
   messages: ChatMessage[],
   pythPrices?: PythPrice[],
   defaultEmail?: string,
-  walletPublicKey?: string
+  walletPublicKey?: string,
+  historicalContext?: string
 ): Promise<{ content: string; action?: any }> {
   const ai = getClient();
 
@@ -109,6 +112,10 @@ export async function chat(
 
   if (walletPublicKey) {
     priceContext += `\n[WALLET CONNECTED]: ${walletPublicKey}`;
+  }
+
+  if (historicalContext) {
+    priceContext += historicalContext;
   }
 
   const contents = messages.map((m, i) => {
