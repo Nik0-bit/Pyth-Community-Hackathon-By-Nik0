@@ -315,9 +315,10 @@ interface ChatTerminalProps {
   onAlertCreated?: (alert: PriceAlert) => void;
   defaultEmail?: string;
   walletPublicKey?: string;
+  compact?: boolean;
 }
 
-export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: ChatTerminalProps) {
+export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, compact = false }: ChatTerminalProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -467,16 +468,18 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
 
   return (
     <div className="flex-1 flex flex-col bg-[#0d1117] relative overflow-hidden">
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-        <div
-          className="w-96 h-96 rounded-full border-[10px] border-purple-500/10 flex items-center justify-center opacity-20"
-          style={{ boxShadow: '0 0 100px rgba(167, 139, 250, 0.2)' }}
-        >
-          <span className="text-[150px] font-bold text-purple-500/20">A</span>
+      {!compact && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+          <div
+            className="w-96 h-96 rounded-full border-[10px] border-purple-500/10 flex items-center justify-center opacity-20"
+            style={{ boxShadow: '0 0 100px rgba(167, 139, 250, 0.2)' }}
+          >
+            <span className="text-[150px] font-bold text-purple-500/20">A</span>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex-1 overflow-auto p-6 space-y-4 relative z-10">
+      <div className={`flex-1 overflow-auto ${compact ? 'p-2 space-y-2' : 'p-6 space-y-4'} relative z-10`}>
         {messages.map(message => (
           <motion.div
             key={message.id}
@@ -486,13 +489,13 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
             className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-3xl ${
+              className={`${compact ? 'max-w-full' : 'max-w-3xl'} ${
                 message.type === 'user'
                   ? 'bg-purple-600/20 border-purple-500/50'
                   : 'bg-gray-900/80 border-gray-700'
-              } border-2 rounded-lg p-4 backdrop-blur-sm`}
+              } border-2 rounded-lg ${compact ? 'p-2' : 'p-4'} backdrop-blur-sm`}
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className={`flex items-center ${compact ? 'gap-1 mb-1' : 'justify-between mb-2'}`}>
                 <div className="flex items-center gap-2">
                   <span
                     className="text-xs font-semibold"
@@ -503,11 +506,13 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
                   >
                     {message.type === 'user' ? 'YOU' : 'AKIRO AI'}
                   </span>
-                  <span className="text-xs text-gray-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                    {message.timestamp.toLocaleTimeString()}
-                  </span>
+                  {!compact && (
+                    <span className="text-xs text-gray-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                      {message.timestamp.toLocaleTimeString()}
+                    </span>
+                  )}
                 </div>
-                {message.type === 'ai' && message.sourceData && (
+                {!compact && message.type === 'ai' && message.sourceData && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -522,7 +527,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
 
               <div
                 className="text-gray-100 whitespace-pre-wrap"
-                style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.9rem', lineHeight: '1.6' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: compact ? '0.72rem' : '0.9rem', lineHeight: '1.5' }}
                 data-testid={`message-${message.id}`}
               >
                 {message.content}
@@ -540,7 +545,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
                 </motion.div>
               )}
 
-              {message.component === 'alertCreated' && message.sourceData && (
+              {!compact && message.component === 'alertCreated' && message.sourceData && (
                 <motion.div
                   initial={{ scale: 0.95, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -577,7 +582,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
                 </motion.div>
               )}
 
-              {message.component === 'prepareSwap' && message.sourceData && (
+              {!compact && message.component === 'prepareSwap' && message.sourceData && (
                 <PrepareSwapCard
                   fromToken={message.sourceData.fromToken}
                   toToken={message.sourceData.toToken}
@@ -587,26 +592,26 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
                 />
               )}
 
-              {message.component === 'volatility' && message.sourceData && (
+              {!compact && message.component === 'volatility' && message.sourceData && (
                 <div className="mt-4"><VolatilityCard data={message.sourceData} /></div>
               )}
-              {message.component === 'confidence' && message.sourceData && (
+              {!compact && message.component === 'confidence' && message.sourceData && (
                 <div className="mt-4"><ConfidenceCard data={message.sourceData} /></div>
               )}
-              {message.component === 'correlation' && message.sourceData && (
+              {!compact && message.component === 'correlation' && message.sourceData && (
                 <div className="mt-4"><CorrelationCard data={message.sourceData} /></div>
               )}
-              {message.component === 'swap' && message.sourceData && (
+              {!compact && message.component === 'swap' && message.sourceData && (
                 <div className="mt-4"><SwapCard data={message.sourceData} /></div>
               )}
-              {message.component === 'limitOrder' && message.sourceData && (
+              {!compact && message.component === 'limitOrder' && message.sourceData && (
                 <div className="mt-4"><LimitOrderCard data={message.sourceData} /></div>
               )}
-              {message.component === 'risk' && message.sourceData && (
+              {!compact && message.component === 'risk' && message.sourceData && (
                 <div className="mt-4"><RiskCard data={message.sourceData} /></div>
               )}
 
-              {message.component === 'comparison' && message.sourceData && (
+              {!compact && message.component === 'comparison' && message.sourceData && (
                 <div className="mt-4 border-2 border-blue-500/30 rounded-lg overflow-hidden">
                   <table className="w-full">
                     <thead className="bg-blue-500/20">
@@ -639,7 +644,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
                 </div>
               )}
 
-              {message.component === 'chart' && message.sourceData?.chartData && (
+              {!compact && message.component === 'chart' && message.sourceData?.chartData && (
                 <div className="mt-4 border-2 border-purple-500/30 rounded-lg p-4 bg-purple-500/5">
                   <div className="flex items-center gap-2 mb-3">
                     <TrendingUp className="w-4 h-4 text-green-400" />
@@ -696,7 +701,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
         <div ref={messagesEndRef} />
       </div>
 
-      {messages.length === 1 && (
+      {messages.length === 1 && !compact && (
         <div className="px-6 pb-4 relative z-10">
           <div className="grid grid-cols-3 gap-2">
             {promptSuggestions.map((suggestion, idx) => (
@@ -718,44 +723,46 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey }: 
         </div>
       )}
 
-      <div className="p-4 border-t border-gray-800 relative z-10">
-        <div className="flex gap-3 items-end">
+      <div className={`${compact ? 'p-2' : 'p-4'} border-t border-gray-800 relative z-10`}>
+        <div className="flex gap-2 items-end">
           <div className="flex-1 relative">
             <textarea
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about prices, swap tokens, set alerts, check history... (Enter to send)"
+              placeholder={compact ? 'Ask AI...' : 'Ask about prices, swap tokens, set alerts, check history... (Enter to send)'}
               rows={1}
-              className="w-full bg-gray-900/80 border-2 border-gray-700 focus:border-purple-500 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 resize-none transition-colors focus:outline-none"
-              style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.9rem', minHeight: '48px', maxHeight: '120px' }}
+              className={`w-full bg-gray-900/80 border-2 border-gray-700 focus:border-purple-500 rounded-xl text-gray-100 placeholder-gray-500 resize-none transition-colors focus:outline-none ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3'}`}
+              style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: compact ? '0.75rem' : '0.9rem', minHeight: compact ? '36px' : '48px', maxHeight: '120px' }}
               data-testid="chat-input"
             />
           </div>
           <Button
             onClick={handleSend}
             disabled={!inputValue.trim() || isTyping}
-            className="bg-purple-600 hover:bg-purple-700 text-white h-12 w-12 p-0 rounded-xl transition-all hover:shadow-lg hover:shadow-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            className={`bg-purple-600 hover:bg-purple-700 text-white p-0 rounded-xl transition-all hover:shadow-lg hover:shadow-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ${compact ? 'h-9 w-9' : 'h-12 w-12'}`}
             data-testid="send-button"
           >
-            <Send className="w-5 h-5" />
+            <Send className={compact ? 'w-3.5 h-3.5' : 'w-5 h-5'} />
           </Button>
         </div>
-        <div className="flex items-center gap-4 mt-2">
-          <span className="text-xs text-gray-600" style={{ fontFamily: 'Inter, sans-serif' }}>
-            Powered by Pyth Network · Gemini AI · Jupiter DEX · Solana
-          </span>
-          {defaultEmail && (
-            <span className="text-xs text-blue-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-              📧 {defaultEmail}
+        {!compact && (
+          <div className="flex items-center gap-4 mt-2">
+            <span className="text-xs text-gray-600" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Powered by Pyth Network · Gemini AI · Jupiter DEX · Solana
             </span>
-          )}
-          {walletPublicKey && (
-            <span className="text-xs text-green-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-              ◎ {walletPublicKey.slice(0, 6)}...{walletPublicKey.slice(-4)}
-            </span>
-          )}
-        </div>
+            {defaultEmail && (
+              <span className="text-xs text-blue-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                📧 {defaultEmail}
+              </span>
+            )}
+            {walletPublicKey && (
+              <span className="text-xs text-green-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                ◎ {walletPublicKey.slice(0, 6)}...{walletPublicKey.slice(-4)}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

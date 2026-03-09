@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightSidebar } from './components/RightSidebar';
 import { ChatTerminal } from './components/ChatTerminal';
+import { AnalyticsPanel } from './components/AnalyticsPanel';
 import { api, type PriceAlert } from './services/apiService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
 
@@ -21,6 +22,11 @@ export default function App() {
   const [walletAddress, setWalletAddress] = useState<string | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [defaultEmail, setDefaultEmail] = useState('');
+  const [mode, setMode] = useState<'chat' | 'analytics'>('chat');
+
+  const handleModeToggle = useCallback(() => {
+    setMode(prev => prev === 'chat' ? 'analytics' : 'chat');
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('akiro_settings');
@@ -105,19 +111,31 @@ export default function App() {
         walletAddress={walletAddress}
         onConnectWallet={handleConnectWallet}
         onOpenSettings={() => setSettingsOpen(true)}
+        mode={mode}
+        onModeToggle={handleModeToggle}
       />
       <div className="flex-1 flex overflow-hidden">
-        <LeftSidebar
-          alerts={alerts}
-          onDeleteAlert={handleDeleteAlert}
-          walletAddress={walletAddress}
-        />
-        <ChatTerminal
-          onAlertCreated={handleNewAlert}
-          defaultEmail={defaultEmail}
-          walletPublicKey={walletAddress}
-        />
-        <RightSidebar onQuickAlert={handleQuickAlert} />
+        {mode === 'analytics' ? (
+          <AnalyticsPanel
+            onAlertCreated={handleNewAlert}
+            defaultEmail={defaultEmail}
+            walletPublicKey={walletAddress}
+          />
+        ) : (
+          <>
+            <LeftSidebar
+              alerts={alerts}
+              onDeleteAlert={handleDeleteAlert}
+              walletAddress={walletAddress}
+            />
+            <ChatTerminal
+              onAlertCreated={handleNewAlert}
+              defaultEmail={defaultEmail}
+              walletPublicKey={walletAddress}
+            />
+            <RightSidebar onQuickAlert={handleQuickAlert} />
+          </>
+        )}
       </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>

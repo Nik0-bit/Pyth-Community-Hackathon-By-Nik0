@@ -1,4 +1,4 @@
-import { Wallet, Circle, Bell, Settings } from 'lucide-react';
+import { Wallet, Circle, Bell, Settings, BarChart2, MessageSquare } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState, useEffect } from 'react';
 import { api } from '../services/apiService';
@@ -8,9 +8,11 @@ interface HeaderProps {
   walletAddress?: string;
   onConnectWallet: () => void;
   onOpenSettings: () => void;
+  mode: 'chat' | 'analytics';
+  onModeToggle: () => void;
 }
 
-export function Header({ alertCount, walletAddress, onConnectWallet, onOpenSettings }: HeaderProps) {
+export function Header({ alertCount, walletAddress, onConnectWallet, onOpenSettings, mode, onModeToggle }: HeaderProps) {
   const [pythStatus, setPythStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   const [geminiStatus, setGeminiStatus] = useState<'checking' | 'active' | 'inactive'>('checking');
 
@@ -74,6 +76,29 @@ export function Header({ alertCount, walletAddress, onConnectWallet, onOpenSetti
             </span>
           </div>
         )}
+
+        <button
+          onClick={onModeToggle}
+          data-testid="mode-toggle-button"
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-semibold transition-all duration-300 ${
+            mode === 'analytics'
+              ? 'bg-cyan-900/30 border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/50 hover:shadow-lg hover:shadow-cyan-500/20'
+              : 'bg-purple-900/30 border-purple-500/50 text-purple-300 hover:bg-purple-900/50 hover:shadow-lg hover:shadow-purple-500/20'
+          }`}
+          style={{ fontFamily: 'Inter, sans-serif' }}
+        >
+          {mode === 'analytics' ? (
+            <>
+              <MessageSquare className="w-4 h-4" />
+              Chat Mode
+            </>
+          ) : (
+            <>
+              <BarChart2 className="w-4 h-4" />
+              Analytic Mode
+            </>
+          )}
+        </button>
       </div>
 
       <div className="flex items-center gap-3">
