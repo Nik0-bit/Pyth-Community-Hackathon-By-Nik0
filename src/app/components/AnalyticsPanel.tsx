@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ChatTerminal } from './ChatTerminal';
+import { ChartWithIndicators, type ChartInterval } from './ChartWithIndicators';
 import type { PriceAlert } from '../services/apiService';
 
 type Category = 'crypto' | 'stock' | 'fx' | 'metal';
@@ -95,10 +96,25 @@ export function AnalyticsPanel({ onAlertCreated, defaultEmail, walletPublicKey }
     setActiveAsset(ASSETS[cat][0]);
   }, []);
 
+  const [activeStudy, setActiveStudy] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<ChartInterval>('1d');
+
+  const TIMEFRAMES: { value: ChartInterval; label: string }[] = [
+    { value: '1m', label: '1m' },
+    { value: '5m', label: '5m' },
+    { value: '15m', label: '15m' },
+    { value: '1h', label: '1h' },
+    { value: '4h', label: '4h' },
+    { value: '1d', label: '1D' },
+    { value: '1w', label: '1W' },
+  ];
+
+  const tvInterval = timeframe === '1d' ? 'D' : timeframe === '1w' ? 'W' : timeframe === '1h' ? '60' : timeframe === '4h' ? '240' : timeframe === '1m' ? '1' : timeframe === '5m' ? '5' : '15';
+
   const tvUrl =
     `https://s.tradingview.com/widgetembed/?` +
     `symbol=${encodeURIComponent(activeAsset.tv)}` +
-    `&interval=D` +
+    `&interval=${tvInterval}` +
     `&theme=dark` +
     `&style=1` +
     `&hideideas=1` +
@@ -106,64 +122,138 @@ export function AnalyticsPanel({ onAlertCreated, defaultEmail, walletPublicKey }
     `&withdateranges=1` +
     `&hide_side_toolbar=0` +
     `&allow_symbol_change=0` +
-    `&referral_id=akiro_labs`;
+    `&referral_id=by_nik0`;
+
+  const toggleStudy = useCallback((studyId: string) => {
+    setActiveStudy(prev => (prev === studyId ? null : studyId));
+  }, []);
+
+  const TA_METRICS = [
+    { id: 'RSI', name: 'RSI', desc: 'Relative Strength Index' },
+    { id: 'MACD', name: 'MACD', desc: 'Moving Average Convergence Divergence' },
+    { id: 'Bollinger Bands', name: 'Bollinger Bands', desc: 'Volatility bands' },
+    { id: 'Moving Average', name: 'MA', desc: 'Moving Average' },
+    { id: 'Stochastic', name: 'Stochastic', desc: 'Stochastic Oscillator' },
+    { id: 'ATR', name: 'ATR', desc: 'Average True Range' },
+    { id: 'OBV', name: 'OBV', desc: 'On-Balance Volume' },
+    { id: 'ADX', name: 'ADX', desc: 'Average Directional Index' },
+    { id: 'CCI', name: 'CCI', desc: 'Commodity Channel Index' },
+    { id: 'WilliamsR', name: 'Williams %R', desc: 'Williams Percent Range' },
+  ];
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      {/* Chart area */}
-      <div className="flex-1 flex flex-col relative overflow-hidden">
-        {/* Asset selector — overlaid top-left */}
-        <div
-          className="absolute top-3 left-3 z-20 flex flex-col gap-2"
-          style={{ maxWidth: '420px' }}
-        >
-          {/* Category tabs */}
-          <div className="flex gap-1 bg-[#0d1117]/90 backdrop-blur border border-gray-700/60 rounded-xl p-1 shadow-xl">
-            {(Object.keys(CATEGORY_LABELS) as Category[]).map(cat => (
-              <button
-                key={cat}
-                onClick={() => handleCategoryChange(cat)}
-                data-testid={`analytics-cat-${cat}`}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                  category === cat
-                    ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/60'
-                }`}
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                {CATEGORY_LABELS[cat]}
-              </button>
-            ))}
+      {/* Chart + metrics area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Asset selector — fixed top row, no overlap */}
+        <div className="shrink-0 flex flex-col gap-2 p-3 pb-2 bg-[#0d1117] border-b border-gray-800">
+          <div className="flex gap-1" style={{ maxWidth: '420px' }}>
+            <div className="flex gap-1 bg-[#0d1117]/90 backdrop-blur border border-gray-700/60 rounded-xl p-1 shadow-xl">
+              {(Object.keys(CATEGORY_LABELS) as Category[]).map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => handleCategoryChange(cat)}
+                  data-testid={`analytics-cat-${cat}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                    category === cat
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/60'
+                  }`}
+                  style={{ fontFamily: 'Inter, sans-serif' }}
+                >
+                  {CATEGORY_LABELS[cat]}
+                </button>
+              ))}
+            </div>
           </div>
-
-          {/* Symbol pills — horizontally scrollable */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide bg-[#0d1117]/85 backdrop-blur border border-gray-700/60 rounded-xl px-2 py-1.5 shadow-xl">
-            {ASSETS[category].map(asset => (
-              <button
-                key={asset.symbol}
-                onClick={() => setActiveAsset(asset)}
-                data-testid={`analytics-asset-${asset.symbol}`}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-mono transition-all duration-150 border ${
-                  activeAsset.symbol === asset.symbol
-                    ? 'bg-purple-600/30 border-purple-500/60 text-purple-300'
-                    : 'border-gray-700/40 text-gray-400 hover:text-gray-200 hover:border-gray-600/60 hover:bg-gray-800/50'
-                }`}
-              >
-                {asset.label}
-              </button>
-            ))}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide max-w-full" style={{ maxWidth: 'min(100%, 520px)' }}>
+            <div className="flex gap-1.5 bg-[#0d1117]/85 backdrop-blur border border-gray-700/60 rounded-xl px-2 py-1.5 shadow-xl">
+              {ASSETS[category].map(asset => (
+                <button
+                  key={asset.symbol}
+                  onClick={() => setActiveAsset(asset)}
+                  data-testid={`analytics-asset-${asset.symbol}`}
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-mono transition-all duration-150 border ${
+                    activeAsset.symbol === asset.symbol
+                      ? 'bg-purple-600/30 border-purple-500/60 text-purple-300'
+                      : 'border-gray-700/40 text-gray-400 hover:text-gray-200 hover:border-gray-600/60 hover:bg-gray-800/50'
+                  }`}
+                >
+                  {asset.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* TradingView iframe */}
-        <iframe
-          key={activeAsset.tv}
-          src={tvUrl}
-          title={`${activeAsset.label} Chart`}
-          className="w-full h-full border-0"
-          allow="fullscreen"
-          data-testid="tradingview-chart"
-        />
+        {/* Timeframe selector */}
+        <div className="shrink-0 flex items-center gap-1 px-3 py-2 border-b border-gray-800 bg-[#0d1117]/80">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Таймфрейм</span>
+          {TIMEFRAMES.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setTimeframe(value)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                timeframe === value
+                  ? 'bg-purple-600/40 text-purple-200 border border-purple-500/50'
+                  : 'border border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Chart + right metrics panel */}
+        <div className="flex-1 flex min-h-0">
+          <div className="flex-1 min-w-0 flex flex-col">
+            {activeAsset.tv.startsWith('BINANCE:') ? (
+              <ChartWithIndicators
+                tvSymbol={activeAsset.tv}
+                activeStudy={activeStudy}
+                interval={timeframe}
+                className="w-full h-full min-h-0"
+              />
+            ) : (
+              <iframe
+                key={activeAsset.tv}
+                src={tvUrl}
+                title={`${activeAsset.label} Chart`}
+                className="w-full h-full border-0 min-h-0"
+                allow="fullscreen"
+                data-testid="tradingview-chart"
+              />
+            )}
+          </div>
+          {/* 10 TA metrics — bottom-right panel */}
+          <div
+            className="shrink-0 w-52 flex flex-col border-l border-gray-800 bg-[#0d1117]/95 backdrop-blur overflow-hidden"
+            style={{ minWidth: '200px' }}
+          >
+            <div className="shrink-0 px-3 py-2 border-b border-gray-800">
+              <span className="text-xs font-semibold text-purple-400 tracking-widest uppercase" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                Technical analysis
+              </span>
+              <p className="text-[10px] text-gray-500 mt-1">Click to overlay on chart (crypto)</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {TA_METRICS.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => toggleStudy(m.id)}
+                  className={`w-full text-left px-2.5 py-2 rounded-lg border text-xs transition-all duration-150 ${
+                    activeStudy === m.id
+                      ? 'bg-purple-600/20 border-purple-500/50 text-purple-300'
+                      : 'border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600 hover:bg-gray-800/50'
+                  }`}
+                >
+                  <span className="font-mono font-semibold">{m.name}</span>
+                  <span className="block text-[10px] text-gray-500 mt-0.5 truncate">{m.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Slim chat panel — right column */}

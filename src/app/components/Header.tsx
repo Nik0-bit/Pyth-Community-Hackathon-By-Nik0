@@ -37,7 +37,7 @@ export function Header({ alertCount, walletAddress, onConnectWallet, onOpenSetti
           className="text-3xl tracking-wider"
           style={{ fontFamily: 'Orbitron, sans-serif', color: '#a78bfa', textShadow: '0 0 20px rgba(167, 139, 250, 0.5)' }}
         >
-          AKIRO LABS
+          By Nik0
         </h1>
         <div
           className="h-10 w-10 flex items-center justify-center rounded-full bg-purple-900/50 border border-purple-500/50"

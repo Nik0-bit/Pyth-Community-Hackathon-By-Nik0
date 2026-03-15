@@ -29,7 +29,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem('akiro_settings');
+    const saved = localStorage.getItem('by_nik0_settings');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -98,7 +98,7 @@ export default function App() {
   }, [defaultEmail, handleNewAlert]);
 
   const saveSettings = () => {
-    localStorage.setItem('akiro_settings', JSON.stringify({ email: defaultEmail }));
+    localStorage.setItem('by_nik0_settings', JSON.stringify({ email: defaultEmail }));
     setSettingsOpen(false);
   };
 

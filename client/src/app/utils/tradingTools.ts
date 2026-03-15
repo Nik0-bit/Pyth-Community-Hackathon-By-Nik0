@@ -1,4 +1,4 @@
-// Trading and Analytics Utilities for Akiro Labs Terminal
+// Trading and Analytics Utilities for By Nik0 Terminal
 
 // Pyth Network Price Feed IDs
 export const PYTH_PRICE_IDS: { [key: string]: string } = {

@@ -1,10 +1,10 @@
-# Akiro Labs DeFi Terminal
+# By Nik0 DeFi Terminal
 
 ## Overview
 
-Akiro Labs is a professional DeFi trading terminal with a chat-based AI assistant interface. It's built as a full-stack web application that lets users interact with live cryptocurrency price data from the Pyth Network via natural language conversation. Key features include:
+By Nik0 is a professional DeFi trading terminal with a chat-based AI assistant interface. It's built as a full-stack web application that lets users interact with live cryptocurrency price data from the Pyth Network via natural language conversation. Key features include:
 
-- **AI Chat Terminal**: Users chat with "Akiro AI" (powered by Google Gemini) to get market analysis, price checks, and trading insights
+- **AI Chat Terminal**: Users chat with "By Nik0 AI" (powered by Google Gemini) to get market analysis, price checks, and trading insights
 - **SSE Live Price Feeds**: Real-time prices via Server-Sent Events (2.5s stream) for Crypto (9), Stocks (AAPL/TSLA/NVDA/MSFT), FX (EUR/USD, GBP/USD), Metals (Gold)
 - **Pyth Benchmarks**: Historical prices at specific timestamps via benchmarks.pyth.network API
 - **Real Jupiter Swaps**: AI detects swap intent → PrepareSwapCard fetches Jupiter quote from browser → user signs with Phantom → tx sent to Solana mainnet
@@ -107,7 +107,7 @@ These use `AI_INTEGRATIONS_GEMINI_API_KEY` and `AI_INTEGRATIONS_GEMINI_BASE_URL`
 | Service | Purpose | Config |
 |---------|---------|--------|
 | **Pyth Network Hermes** | Real-time crypto price oracles | `https://hermes.pyth.network/v2/...` — no auth required |
-| **Google Gemini** | AI chat assistant (Akiro AI) | `GEMINI_API_KEY` env var; also supports `AI_INTEGRATIONS_GEMINI_BASE_URL` + `AI_INTEGRATIONS_GEMINI_API_KEY` for Replit's proxy |
+| **Google Gemini** | AI chat assistant (By Nik0 AI) | `GEMINI_API_KEY` env var; also supports `AI_INTEGRATIONS_GEMINI_BASE_URL` + `AI_INTEGRATIONS_GEMINI_API_KEY` for Replit's proxy |
 | **Resend** | Email notifications for triggered price alerts | `RESEND_API_KEY` env var |
 | **Phantom Wallet** | Solana wallet connection via browser extension | `window.solana` browser API — no backend key needed |
 | **Jupiter DEX** | Swap routing on Solana (described in AI responses, not directly integrated yet) | No API key currently |

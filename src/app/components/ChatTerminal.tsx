@@ -41,7 +41,6 @@ const thinkingStages: AIThinkingStatus[] = [
 
 const promptSuggestions = [
   { icon: Bell, text: 'Alert me when SOL hits $200', gradient: 'from-purple-500 to-pink-600' },
-  { icon: Repeat, text: 'Swap 1 SOL to USDC', gradient: 'from-blue-500 to-cyan-600' },
   { icon: TrendingUp, text: 'Check SOL volatility', gradient: 'from-green-500 to-emerald-600' },
   { icon: Shield, text: 'Analyze my portfolio risk', gradient: 'from-orange-500 to-red-600' },
   { icon: History, text: 'BTC price on Jan 1 2025', gradient: 'from-yellow-500 to-orange-600' },
@@ -98,7 +97,11 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
         quoteResponse: res.quote.quoteResponse,
       });
     } catch (err: any) {
-      setState({ status: 'error', error: err.message });
+      const msg = err?.message || '';
+      const friendly = msg.includes('not tradable') || msg.includes('not currently available')
+        ? 'This token is not currently available for swap on Jupiter. Try another token.'
+        : msg;
+      setState({ status: 'error', error: friendly });
     }
   }, [fromToken, toToken, amount]);
 
@@ -109,15 +112,19 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
   const handleSign = useCallback(async () => {
     if (!state.quoteResponse) return;
 
-    const wallet = (window as any).solana;
-    if (!wallet?.isConnected && !walletPublicKey) {
-      setState(s => ({ ...s, status: 'error', error: 'Phantom wallet not connected. Connect your wallet first.' }));
+    const wallet = (window as any).solana || (window as any).phantom?.solana;
+    if (!wallet) {
+      setState(s => ({ ...s, status: 'error', error: 'Phantom not found. Install Phantom or reconnect the wallet.' }));
+      return;
+    }
+    if (!wallet.isConnected && !walletPublicKey) {
+      setState(s => ({ ...s, status: 'error', error: 'Phantom not connected. Connect your wallet in the header.' }));
       return;
     }
 
-    const pubkey = walletPublicKey || wallet?.publicKey?.toString();
+    const pubkey = walletPublicKey || wallet.publicKey?.toString();
     if (!pubkey) {
-      setState(s => ({ ...s, status: 'error', error: 'Wallet public key not available.' }));
+      setState(s => ({ ...s, status: 'error', error: 'Wallet public key not available. Reconnect Phantom.' }));
       return;
     }
 
@@ -131,6 +138,10 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
       const { VersionedTransaction } = await import('@solana/web3.js');
       const transaction = VersionedTransaction.deserialize(txBytes);
 
+      if (typeof wallet.signAndSendTransaction !== 'function') {
+        setState(s => ({ ...s, status: 'error', error: 'This wallet does not support signing. Use Phantom.' }));
+        return;
+      }
       const result = await wallet.signAndSendTransaction(transaction);
       const sig = String(result?.signature || result);
 
@@ -213,6 +224,7 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
         <span className="text-sm font-bold text-blue-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
           JUPITER SWAP
         </span>
+        <span className="text-xs text-gray-500">(real quote from Jupiter · Solana)</span>
       </div>
 
       {note && (
@@ -285,14 +297,23 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
       )}
 
       {(state.status === 'quoted') && (
-        <Button
-          onClick={handleSign}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded-lg transition-all"
-          data-testid="sign-swap-button"
-        >
-          <Zap className="w-4 h-4 mr-2" />
-          Sign & Send via Phantom
-        </Button>
+        walletPublicKey ? (
+          <Button
+            onClick={handleSign}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded-lg transition-all"
+            data-testid="sign-swap-button"
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            Sign & Send via Phantom
+          </Button>
+        ) : (
+          <Button
+            disabled
+            className="w-full bg-gray-600 text-gray-400 text-sm py-2 rounded-lg cursor-not-allowed"
+          >
+            Connect Phantom in the header to sign (quote is real)
+          </Button>
+        )
       )}
 
       {(state.status === 'quoting' || state.status === 'building' || state.status === 'signing' || state.status === 'confirming') && (
@@ -303,8 +324,8 @@ function PrepareSwapCard({ fromToken, toToken, amount, walletPublicKey, note }: 
       )}
 
       {!walletPublicKey && state.status !== 'confirmed' && (
-        <p className="text-xs text-yellow-500 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
-          ⚠ Connect your Phantom wallet to execute swaps
+        <p className="text-xs text-amber-400 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+          Wallet not connected — click Connect in the header, then sign the transaction here.
         </p>
       )}
     </motion.div>
@@ -323,7 +344,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, co
     {
       id: '1',
       type: 'ai',
-      content: 'Welcome to Akiro Labs Terminal. I\'m your AI trading assistant powered by Pyth Network real-time oracles on Solana.\n\n> Capabilities:\n• Real-time price feeds: crypto, stocks (AAPL, TSLA, NVDA, MSFT), FX (EUR/USD, GBP/USD), gold\n• Price alerts with email notifications\n• Historical prices via Pyth Benchmarks\n• Real Jupiter DEX swaps (sign with Phantom)\n• Volatility & correlation analysis\n• Portfolio risk management\n\nAsk me anything — in English or Russian!',
+      content: 'Welcome to By Nik0 Terminal. I\'m your AI assistant for Pyth Network real-time oracles on Solana.\n\n> Capabilities:\n• Real-time price feeds: crypto, stocks, FX, gold\n• Price alerts with email notifications\n• Historical prices via Pyth Benchmarks\n• Volatility & correlation analysis\n\nAsk me anything. (I reply in English by default; if you write in another language, I\'ll match it.)',
       timestamp: new Date(),
     },
   ]);
@@ -372,44 +393,66 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, co
       { role: 'user', content: text },
     ];
 
+    const applySuccess = (response: { success: boolean; content: string; alert?: any; action?: any }) => {
+      setChatHistory([
+        ...newHistory,
+        { role: 'assistant', content: response.content },
+      ]);
+      let component: Message['component'] | undefined;
+      let sourceData: any;
+      if (response.alert) {
+        component = 'alertCreated';
+        sourceData = response.alert;
+        onAlertCreated?.(response.alert);
+      } else if (response.action?.action === 'create_alert') {
+        component = 'alertCreated';
+        sourceData = response.action;
+      } else if (response.action?.action === 'prepare_swap') {
+        component = undefined;
+        sourceData = undefined;
+      }
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: response.content,
+        timestamp: new Date(),
+        component,
+        sourceData,
+      };
+      setMessages(prev => [...prev, aiMessage]);
+    };
+
     try {
-      const response = await api.chat(newHistory, defaultEmail, walletPublicKey);
+      let response = await api.chat(newHistory, defaultEmail, walletPublicKey);
 
       if (response.success) {
-        setChatHistory([
-          ...newHistory,
-          { role: 'assistant', content: response.content },
-        ]);
-
-        let component: Message['component'] | undefined;
-        let sourceData: any;
-
-        if (response.alert) {
-          component = 'alertCreated';
-          sourceData = response.alert;
-          onAlertCreated?.(response.alert);
-        } else if (response.action?.action === 'create_alert') {
-          component = 'alertCreated';
-          sourceData = response.action;
-        } else if (response.action?.action === 'prepare_swap') {
-          component = 'prepareSwap';
-          sourceData = response.action;
+        applySuccess(response);
+      } else if (/429|quota|rate limit|RESOURCE_EXHAUSTED/i.test(response.error || '')) {
+        await new Promise(r => setTimeout(r, 2000));
+        response = await api.chat(newHistory, defaultEmail, walletPublicKey);
+        if (response.success) {
+          applySuccess(response);
+        } else {
+          throw new Error(response.error || 'Unknown error');
         }
-
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          type: 'ai',
-          content: response.content,
-          timestamp: new Date(),
-          component,
-          sourceData,
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
       } else {
         throw new Error(response.error || 'Unknown error');
       }
     } catch (err: any) {
+      const isRetryable = /429|quota|rate limit|RESOURCE_EXHAUSTED/i.test(err?.message || '');
+      if (isRetryable) {
+        try {
+          await new Promise(r => setTimeout(r, 2000));
+          const response = await api.chat(newHistory, defaultEmail, walletPublicKey);
+          if (response.success) {
+            applySuccess(response);
+            return;
+          }
+        } catch (_) {
+          // fall through to fallback
+        }
+      }
+
       console.error('[Chat] error:', err);
 
       const lowerText = text.toLowerCase();
@@ -431,18 +474,33 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, co
         fallbackContent = `> ✓ Pyth Oracle confidence analyzed\n\n🔍 Confidence Analysis for ${symbol}`;
         fallbackComponent = 'confidence';
         fallbackSourceData = analysis;
-      } else if (lowerText.includes('swap') || lowerText.includes('trade')) {
-        const swap = SmartSwapEngine.prepareSwap('SOL', 10, 148, 'USDC', 1.0);
-        fallbackContent = `> ✓ Smart Swap preview calculated\n\n💱 Jupiter Route Preview`;
-        fallbackComponent = 'swap';
-        fallbackSourceData = swap;
+      } else if (lowerText.includes('swap') || lowerText.includes('trade') || lowerText.includes('обмен')) {
+        const supportedSwap = ['sol','usdc','usdt','jup','pyth','bonk','wif','jto','ray','msol','stsol','srm','mngo','orca','ldo'];
+        const notSolana = ['btc','bitcoin','eth','ethereum','эфир','биткоин','bnb','ada','avax','matic','uni','dai','floki','xrp','doge','dot','link','ton','trx','ltc','bch','atom','shib','pepe','apt','sui','sei','tia','near','op','arb','fil','sand','mana','axs'];
+        const hasNotSolana = notSolana.some(t => lowerText.includes(t));
+        if (hasNotSolana) {
+          fallbackContent = `> This action is not possible. We only support the Solana network — swaps are available for Solana network tokens only. Tokens from other networks cannot be swapped.`;
+          fallbackComponent = undefined;
+          fallbackSourceData = undefined;
+        } else {
+          fallbackContent = `> I can only help with prices, alerts, and analysis. For swapping tokens, use Jupiter or your wallet's swap feature directly.`;
+          fallbackComponent = undefined;
+          fallbackSourceData = undefined;
+        }
       } else if (lowerText.includes('correlat')) {
         const corr = await CrossAssetCorrelator.correlate('SOL', 148, 5.6, 'ETH', 3400, 4.7);
         fallbackContent = `> ✓ Correlation analysis complete\n\n🔗 Cross-Asset Analysis`;
         fallbackComponent = 'correlation';
         fallbackSourceData = corr;
       } else {
-        fallbackContent = `> ⚠️ AI service temporarily unavailable\n\nLocal analysis tools still available:\n• Volatility Engine\n• Confidence Analyzer\n• Correlation Analysis\n\nError: ${err.message}`;
+        const shortError = (err?.message || '').length > 200 || (err?.message || '').includes('"code":')
+          ? (err?.message || '').replace(/\s*\{[\s\S]*$/m, '').slice(0, 120) + (err?.message?.length > 120 ? '…' : '')
+          : (err?.message || 'Unknown error');
+        const isQuota = /429|quota|rate limit|RESOURCE_EXHAUSTED/i.test(err?.message || '');
+        const hint = isQuota
+          ? '\n\n⏱ Try again in a minute or check your Gemini API quota.'
+          : `\n\nError: ${shortError}`;
+        fallbackContent = `> ⚠️ AI service temporarily unavailable\n\nLocal analysis tools still available:\n• Volatility Engine\n• Confidence Analyzer\n• Correlation Analysis${hint}`;
       }
 
       const fallbackMsg: Message = {
@@ -504,7 +562,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, co
                       color: message.type === 'user' ? '#a78bfa' : '#3b82f6',
                     }}
                   >
-                    {message.type === 'user' ? 'YOU' : 'AKIRO AI'}
+                    {message.type === 'user' ? 'YOU' : 'By Nik0 AI'}
                   </span>
                   {!compact && (
                     <span className="text-xs text-gray-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
@@ -580,16 +638,6 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, co
                     </div>
                   </div>
                 </motion.div>
-              )}
-
-              {!compact && message.component === 'prepareSwap' && message.sourceData && (
-                <PrepareSwapCard
-                  fromToken={message.sourceData.fromToken}
-                  toToken={message.sourceData.toToken}
-                  amount={message.sourceData.amount}
-                  walletPublicKey={walletPublicKey}
-                  note={message.sourceData.note}
-                />
               )}
 
               {!compact && message.component === 'volatility' && message.sourceData && (
@@ -730,7 +778,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, co
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={compact ? 'Ask AI...' : 'Ask about prices, swap tokens, set alerts, check history... (Enter to send)'}
+              placeholder={compact ? 'Ask AI...' : 'Ask about prices, set alerts, check history... (Enter to send)'}
               rows={1}
               className={`w-full bg-gray-900/80 border-2 border-gray-700 focus:border-purple-500 rounded-xl text-gray-100 placeholder-gray-500 resize-none transition-colors focus:outline-none ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3'}`}
               style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: compact ? '0.75rem' : '0.9rem', minHeight: compact ? '36px' : '48px', maxHeight: '120px' }}
@@ -749,7 +797,7 @@ export function ChatTerminal({ onAlertCreated, defaultEmail, walletPublicKey, co
         {!compact && (
           <div className="flex items-center gap-4 mt-2">
             <span className="text-xs text-gray-600" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Powered by Pyth Network · Gemini AI · Jupiter DEX · Solana
+              Powered by Pyth Network · Gemini AI · Solana
             </span>
             {defaultEmail && (
               <span className="text-xs text-blue-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>

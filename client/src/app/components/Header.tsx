@@ -19,11 +19,11 @@ export function Header() {
           className="text-3xl tracking-wider" 
           style={{ fontFamily: 'Orbitron, sans-serif', color: '#a78bfa', textShadow: '0 0 20px rgba(167, 139, 250, 0.5)' }}
         >
-          AKIRO LABS
+          By Nik0
         </h1>
         <img 
           src={logoImage} 
-          alt="Akiro Labs Logo"
+          alt="By Nik0 Logo"
           className="h-10 w-10 object-contain"
           style={{
             filter: 'brightness(0) saturate(100%) invert(79%) sepia(18%) saturate(1654%) hue-rotate(205deg) brightness(101%) contrast(98%)',

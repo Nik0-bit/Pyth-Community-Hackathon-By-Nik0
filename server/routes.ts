@@ -7,7 +7,7 @@ import {
   getAllSupportedSymbols,
   getSymbolsByCategory,
 } from './pythService.js';
-import { chat } from './geminiService.js';
+import { chat, isGeminiConfigured } from './geminiService.js';
 import {
   createAlert,
   getAlerts,
@@ -115,7 +115,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.get('/api/health', (_req, res) => {
     res.json({
       status: 'ok',
-      gemini: !!(process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || process.env.GEMINI_API_KEY),
+      gemini: isGeminiConfigured(),
       resend: !!process.env.RESEND_API_KEY,
       pyth: 'hermes.pyth.network',
     });
@@ -230,6 +230,19 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       }
 
       if (result.action?.action === 'prepare_swap') {
+        const supported = getSupportedSwapTokens();
+        const from = String(result.action.fromToken || '').toUpperCase();
+        const to = String(result.action.toToken || '').toUpperCase();
+        const fromOk = supported.includes(from);
+        const toOk = supported.includes(to);
+        if (!fromOk || !toOk) {
+          const msg = 'This action is not possible. We only support the Solana network — swaps are available for Solana network tokens only. Tokens from other networks cannot be swapped.';
+          return res.json({
+            success: true,
+            content: (result.content ? result.content + '\n\n' : '') + '> ' + msg,
+            action: undefined,
+          });
+        }
         return res.json({
           success: true,
           content: result.content,
@@ -240,7 +253,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ success: true, content: result.content, action: result.action });
     } catch (err: any) {
       console.error('[Chat] error:', err);
-      res.status(500).json({ success: false, error: err.message });
+      let message = err?.message || '';
+      if (message.includes('API key not valid') || message.includes('API_KEY_INVALID') || message.includes('INVALID_ARGUMENT')) {
+        message = 'Gemini API key invalid or missing. Get a free key: https://aistudio.google.com/apikey — then set GEMINI_API_KEY in .env';
+      } else if (message.includes('Gemini API key not set')) {
+        message = 'Gemini API key not set. Get a free key: https://aistudio.google.com/apikey — then add GEMINI_API_KEY=your_key to .env';
+      } else if (message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota') || message.includes('Quota exceeded')) {
+        message = 'Gemini rate limit reached. Please wait a minute and try again, or check your quota at https://ai.google.dev/gemini-api/docs/rate-limits';
+      }
+      res.status(500).json({ success: false, error: message });
     }
   });
 
@@ -268,6 +289,30 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ success: true, ...tx });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/klines', async (req, res) => {
+    try {
+      const symbol = String(req.query.symbol || 'BTCUSDT').toUpperCase();
+      const interval = String(req.query.interval || '1d');
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || '200'), 10) || 200, 1), 500);
+      const binanceSymbol = symbol.includes(':') ? symbol.split(':')[1] : symbol;
+      const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=${interval}&limit=${limit}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Binance API ${resp.status}`);
+      const raw = (await resp.json()) as [number, string, string, string, string, string, number, ...unknown[]][];
+      const klines = raw.map(([t, o, h, l, c, v]) => ({
+        time: Math.floor(t / 1000) as any,
+        open: parseFloat(o),
+        high: parseFloat(h),
+        low: parseFloat(l),
+        close: parseFloat(c),
+        volume: parseFloat(v),
+      }));
+      res.json({ success: true, klines });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Failed to fetch klines' });
     }
   });
 
@@ -319,7 +364,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
       const resend = new Resend(apiKey);
       const result = await resend.emails.send({
-        from: 'Akiro Labs <alerts@onboarding.resend.dev>',
+        from: 'By Nik0 <alerts@onboarding.resend.dev>',
         to,
         subject,
         html,
@@ -345,7 +390,7 @@ function buildAlertEmail(params: {
   return `
     <div style="font-family:'Courier New',monospace;background:#0d1117;color:#e6edf3;padding:24px;border-radius:12px;max-width:500px;">
       <div style="border-bottom:1px solid #30363d;padding-bottom:16px;margin-bottom:16px;">
-        <h1 style="color:#a78bfa;margin:0;font-size:24px;">⚡ AKIRO LABS</h1>
+        <h1 style="color:#a78bfa;margin:0;font-size:24px;">⚡ By Nik0</h1>
         <p style="color:#6e7681;margin:4px 0 0 0;font-size:12px;">Price Alert Triggered</p>
       </div>
       <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:16px;">
@@ -361,7 +406,7 @@ function buildAlertEmail(params: {
       <div style="background:#0d1117;border:1px solid #3d444d;border-radius:8px;padding:12px;margin-bottom:16px;">
         <p style="margin:0;color:#6e7681;font-size:11px;">⚡ Powered by Pyth Network Oracle · Real-time price feeds on Solana</p>
       </div>
-      <p style="color:#6e7681;font-size:11px;margin:0;">Configured in Akiro Labs Terminal.</p>
+      <p style="color:#6e7681;font-size:11px;margin:0;">Configured in By Nik0 Terminal.</p>
     </div>
   `;
 }
@@ -373,7 +418,7 @@ async function sendAlertEmail(alert: any, currentPrice: number) {
   const resend = new Resend(apiKey);
   try {
     await resend.emails.send({
-      from: 'Akiro Labs <alerts@onboarding.resend.dev>',
+      from: 'By Nik0 <alerts@onboarding.resend.dev>',
       to: alert.email,
       subject: `🔔 ${alert.symbol} Alert: $${alert.targetPrice.toLocaleString()} ${alert.condition === 'above' ? 'reached' : 'hit'}`,
       html: buildAlertEmail({

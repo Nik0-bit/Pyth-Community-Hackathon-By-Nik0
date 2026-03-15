@@ -56,7 +56,7 @@ export function ChatTerminal() {
     {
       id: '1',
       type: 'ai',
-      content: 'Welcome to Akiro Labs Terminal. I\'m your AI trading assistant powered by Pyth Network.\n\n🔧 Available Tools:\n• Volatility Engine - Risk analysis\n• Confidence Analyzer - Oracle quality check\n• Cross-Asset Correlator - Market relationships\n• Smart Swap - Jupiter integration\n• Limit Order Bot - Automated orders\n• Risk Manager - Portfolio protection\n\nTry the commands below or ask me anything!',
+      content: 'Welcome to By Nik0 Terminal. I\'m your AI trading assistant powered by Pyth Network.\n\n🔧 Available Tools:\n• Volatility Engine - Risk analysis\n• Confidence Analyzer - Oracle quality check\n• Cross-Asset Correlator - Market relationships\n• Smart Swap - Jupiter integration\n• Limit Order Bot - Automated orders\n• Risk Manager - Portfolio protection\n\nTry the commands below or ask me anything!',
       timestamp: new Date(),
     },
   ]);
@@ -376,11 +376,11 @@ export function ChatTerminal() {
 
   return (
     <div className="flex-1 flex flex-col bg-[#0d1117] relative overflow-hidden">
-      {/* Akiro Labs Logo Background */}
+      {/* By Nik0 Logo Background */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
         <img 
           src={logoImage} 
-          alt="Akiro Labs"
+          alt="By Nik0"
           className="w-96 h-96 object-contain opacity-[0.08]"
           style={{
             filter: 'hue-rotate(200deg) brightness(1.2) saturate(2)',
@@ -414,7 +414,7 @@ export function ChatTerminal() {
                       color: message.type === 'user' ? '#a78bfa' : '#3b82f6',
                     }}
                   >
-                    {message.type === 'user' ? 'YOU' : 'AKIRO AI'}
+                    {message.type === 'user' ? 'YOU' : 'By Nik0 AI'}
                   </span>
                   <span className="text-xs text-gray-500" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                     {message.timestamp.toLocaleTimeString()}
